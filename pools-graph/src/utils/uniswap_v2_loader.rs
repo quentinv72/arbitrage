@@ -1,10 +1,11 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use contracts::i_uniswap_v_2_factory::IUniswapV2Factory;
 use ethers::providers::Middleware;
 use ethers::types::{Address, U256};
 use log::{debug, error, info};
+
+use contracts::i_uniswap_v_2_factory::IUniswapV2Factory;
 
 use crate::pool_data::uniswap_v2::UniswapV2;
 use crate::pools_graph::PoolsGraph;
@@ -16,8 +17,7 @@ pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     info!("Loading V2 pools...");
-    for factory in factory_addresses {
-        let factory_address: Address = factory.parse()?;
+    for factory_address in factory_addresses {
         let client_clone = Arc::clone(&client);
         let factory_contract = IUniswapV2Factory::new(factory_address, client_clone);
         let number_of_pairs = factory_contract.all_pairs_length().call().await?;
@@ -36,7 +36,7 @@ pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
         for task in tasks {
             match task.await.unwrap() {
                 Ok(pool_data) => {
-                    pools_graph.insert(pool_data);
+                    pools_graph.insert(Box::new(pool_data));
                     ()
                 }
                 Err(e) => error!("Failed fetch reserve {e}"),

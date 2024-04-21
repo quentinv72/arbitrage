@@ -21,6 +21,114 @@ pub mod i_uniswap_v3_pool {
             constructor: ::core::option::Option::None,
             functions: ::core::convert::From::from([
                 (
+                    ::std::borrow::ToOwned::to_owned("factory"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned("factory"),
+                            inputs: ::std::vec![],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Address,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("address"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("fee"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned("fee"),
+                            inputs: ::std::vec![],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::string::String::new(),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(24usize),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("uint24"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
+                (
+                    ::std::borrow::ToOwned::to_owned("slot0"),
+                    ::std::vec![
+                        ::ethers::core::abi::ethabi::Function {
+                            name: ::std::borrow::ToOwned::to_owned("slot0"),
+                            inputs: ::std::vec![],
+                            outputs: ::std::vec![
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("sqrtPriceX96"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(
+                                        160usize,
+                                    ),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("uint160"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("tick"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Int(24usize),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("int24"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("observationIndex"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(16usize),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("uint16"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "observationCardinality",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(16usize),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("uint16"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned(
+                                        "observationCardinalityNext",
+                                    ),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(16usize),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("uint16"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("feeProtocol"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Uint(8usize),
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("uint8"),
+                                    ),
+                                },
+                                ::ethers::core::abi::ethabi::Param {
+                                    name: ::std::borrow::ToOwned::to_owned("unlocked"),
+                                    kind: ::ethers::core::abi::ethabi::ParamType::Bool,
+                                    internal_type: ::core::option::Option::Some(
+                                        ::std::borrow::ToOwned::to_owned("bool"),
+                                    ),
+                                },
+                            ],
+                            constant: ::core::option::Option::None,
+                            state_mutability: ::ethers::core::abi::ethabi::StateMutability::View,
+                        },
+                    ],
+                ),
+                (
                     ::std::borrow::ToOwned::to_owned("swap"),
                     ::std::vec![
                         ::ethers::core::abi::ethabi::Function {
@@ -175,6 +283,34 @@ pub mod i_uniswap_v3_pool {
                 ),
             )
         }
+        ///Calls the contract's `factory` (0xc45a0155) function
+        pub fn factory(
+            &self,
+        ) -> ::ethers::contract::builders::ContractCall<
+            M,
+            ::ethers::core::types::Address,
+        > {
+            self.0
+                .method_hash([196, 90, 1, 85], ())
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `fee` (0xddca3f43) function
+        pub fn fee(&self) -> ::ethers::contract::builders::ContractCall<M, u32> {
+            self.0
+                .method_hash([221, 202, 63, 67], ())
+                .expect("method not found (this should never happen)")
+        }
+        ///Calls the contract's `slot0` (0x3850c7bd) function
+        pub fn slot_0(
+            &self,
+        ) -> ::ethers::contract::builders::ContractCall<
+            M,
+            (::ethers::core::types::U256, i32, u16, u16, u16, u8, bool),
+        > {
+            self.0
+                .method_hash([56, 80, 199, 189], ())
+                .expect("method not found (this should never happen)")
+        }
         ///Calls the contract's `swap` (0x128acb08) function
         pub fn swap(
             &self,
@@ -229,6 +365,45 @@ pub mod i_uniswap_v3_pool {
             Self::new(contract.address(), contract.client())
         }
     }
+    ///Container type for all input parameters for the `factory` function with signature `factory()` and selector `0xc45a0155`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "factory", abi = "factory()")]
+    pub struct FactoryCall;
+    ///Container type for all input parameters for the `fee` function with signature `fee()` and selector `0xddca3f43`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "fee", abi = "fee()")]
+    pub struct FeeCall;
+    ///Container type for all input parameters for the `slot0` function with signature `slot0()` and selector `0x3850c7bd`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthCall,
+        ::ethers::contract::EthDisplay,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    #[ethcall(name = "slot0", abi = "slot0()")]
+    pub struct Slot0Call;
     ///Container type for all input parameters for the `swap` function with signature `swap(address,bool,int256,uint160,bytes)` and selector `0x128acb08`
     #[derive(
         Clone,
@@ -277,6 +452,9 @@ pub mod i_uniswap_v3_pool {
     ///Container type for all of the contract's call
     #[derive(Clone, ::ethers::contract::EthAbiType, Debug, PartialEq, Eq, Hash)]
     pub enum IUniswapV3PoolCalls {
+        Factory(FactoryCall),
+        Fee(FeeCall),
+        Slot0(Slot0Call),
         Swap(SwapCall),
         Token0(Token0Call),
         Token1(Token1Call),
@@ -286,6 +464,21 @@ pub mod i_uniswap_v3_pool {
             data: impl AsRef<[u8]>,
         ) -> ::core::result::Result<Self, ::ethers::core::abi::AbiError> {
             let data = data.as_ref();
+            if let Ok(decoded) = <FactoryCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::Factory(decoded));
+            }
+            if let Ok(decoded) = <FeeCall as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::Fee(decoded));
+            }
+            if let Ok(decoded) = <Slot0Call as ::ethers::core::abi::AbiDecode>::decode(
+                data,
+            ) {
+                return Ok(Self::Slot0(decoded));
+            }
             if let Ok(decoded) = <SwapCall as ::ethers::core::abi::AbiDecode>::decode(
                 data,
             ) {
@@ -307,6 +500,9 @@ pub mod i_uniswap_v3_pool {
     impl ::ethers::core::abi::AbiEncode for IUniswapV3PoolCalls {
         fn encode(self) -> Vec<u8> {
             match self {
+                Self::Factory(element) => ::ethers::core::abi::AbiEncode::encode(element),
+                Self::Fee(element) => ::ethers::core::abi::AbiEncode::encode(element),
+                Self::Slot0(element) => ::ethers::core::abi::AbiEncode::encode(element),
                 Self::Swap(element) => ::ethers::core::abi::AbiEncode::encode(element),
                 Self::Token0(element) => ::ethers::core::abi::AbiEncode::encode(element),
                 Self::Token1(element) => ::ethers::core::abi::AbiEncode::encode(element),
@@ -316,10 +512,28 @@ pub mod i_uniswap_v3_pool {
     impl ::core::fmt::Display for IUniswapV3PoolCalls {
         fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
             match self {
+                Self::Factory(element) => ::core::fmt::Display::fmt(element, f),
+                Self::Fee(element) => ::core::fmt::Display::fmt(element, f),
+                Self::Slot0(element) => ::core::fmt::Display::fmt(element, f),
                 Self::Swap(element) => ::core::fmt::Display::fmt(element, f),
                 Self::Token0(element) => ::core::fmt::Display::fmt(element, f),
                 Self::Token1(element) => ::core::fmt::Display::fmt(element, f),
             }
+        }
+    }
+    impl ::core::convert::From<FactoryCall> for IUniswapV3PoolCalls {
+        fn from(value: FactoryCall) -> Self {
+            Self::Factory(value)
+        }
+    }
+    impl ::core::convert::From<FeeCall> for IUniswapV3PoolCalls {
+        fn from(value: FeeCall) -> Self {
+            Self::Fee(value)
+        }
+    }
+    impl ::core::convert::From<Slot0Call> for IUniswapV3PoolCalls {
+        fn from(value: Slot0Call) -> Self {
+            Self::Slot0(value)
         }
     }
     impl ::core::convert::From<SwapCall> for IUniswapV3PoolCalls {
@@ -336,6 +550,50 @@ pub mod i_uniswap_v3_pool {
         fn from(value: Token1Call) -> Self {
             Self::Token1(value)
         }
+    }
+    ///Container type for all return fields from the `factory` function with signature `factory()` and selector `0xc45a0155`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct FactoryReturn(pub ::ethers::core::types::Address);
+    ///Container type for all return fields from the `fee` function with signature `fee()` and selector `0xddca3f43`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct FeeReturn(pub u32);
+    ///Container type for all return fields from the `slot0` function with signature `slot0()` and selector `0x3850c7bd`
+    #[derive(
+        Clone,
+        ::ethers::contract::EthAbiType,
+        ::ethers::contract::EthAbiCodec,
+        Default,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash
+    )]
+    pub struct Slot0Return {
+        pub sqrt_price_x96: ::ethers::core::types::U256,
+        pub tick: i32,
+        pub observation_index: u16,
+        pub observation_cardinality: u16,
+        pub observation_cardinality_next: u16,
+        pub fee_protocol: u8,
+        pub unlocked: bool,
     }
     ///Container type for all return fields from the `swap` function with signature `swap(address,bool,int256,uint160,bytes)` and selector `0x128acb08`
     #[derive(
