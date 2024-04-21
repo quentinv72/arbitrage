@@ -16,7 +16,7 @@ pub enum Env {
 }
 
 impl Env {
-    async fn get_env() -> Self {
+    pub async fn get_env() -> Self {
         match env::var("ENV") {
             Ok(val) => {
                 let lowercase = val.to_lowercase();
