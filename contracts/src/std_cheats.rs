@@ -10,11 +10,6 @@ pub use std_cheats::*;
     non_camel_case_types,
 )]
 pub mod std_cheats {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/StdCheats.sol/StdCheats.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

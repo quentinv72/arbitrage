@@ -10,11 +10,6 @@ pub use context::*;
     non_camel_case_types,
 )]
 pub mod context {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/Context.sol/Context.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

@@ -10,11 +10,6 @@ pub use safe_erc20::*;
     non_camel_case_types,
 )]
 pub mod safe_erc20 {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/SafeERC20.sol/SafeERC20.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

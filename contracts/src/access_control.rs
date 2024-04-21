@@ -10,11 +10,6 @@ pub use access_control::*;
     non_camel_case_types,
 )]
 pub mod access_control {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/AccessControl.sol/AccessControl.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

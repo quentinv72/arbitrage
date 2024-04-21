@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
@@ -31,9 +32,10 @@ fn main() {
                 panic!("{contract_name} seems duplicated")
             }
             seen.insert(contract_name.to_string());
+            let abi = fs::read_to_string(path).unwrap();
             let module_name = contract_name.to_case(Case::Snake);
             let binding_filename = format!("{}{}{}", "/Users/quentin/arbitrage/contracts/src/", module_name, rust_extension);
-            Abigen::new(contract_name, path.to_str().unwrap()).unwrap().generate().unwrap().write_to_file(binding_filename).unwrap();
+            Abigen::new(contract_name, abi).unwrap().generate().unwrap().write_to_file(binding_filename).unwrap();
             lib.write(format!("pub mod {};\n", module_name).as_bytes()).unwrap();
         }
     }

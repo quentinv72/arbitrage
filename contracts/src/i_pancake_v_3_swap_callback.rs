@@ -10,11 +10,6 @@ pub use i_pancake_v3_swap_callback::*;
     non_camel_case_types,
 )]
 pub mod i_pancake_v3_swap_callback {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/IPancakeV3SwapCallback.sol/IPancakeV3SwapCallback.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

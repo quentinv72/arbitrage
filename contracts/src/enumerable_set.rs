@@ -10,11 +10,6 @@ pub use enumerable_set::*;
     non_camel_case_types,
 )]
 pub mod enumerable_set {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/EnumerableSet.sol/EnumerableSet.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

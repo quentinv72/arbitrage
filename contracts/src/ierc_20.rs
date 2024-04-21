@@ -10,11 +10,6 @@ pub use ierc20::*;
     non_camel_case_types,
 )]
 pub mod ierc20 {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/IERC20.sol/IERC20.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

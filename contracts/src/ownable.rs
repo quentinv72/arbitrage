@@ -10,11 +10,6 @@ pub use ownable::*;
     non_camel_case_types,
 )]
 pub mod ownable {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/Ownable.sol/Ownable.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

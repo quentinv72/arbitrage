@@ -10,11 +10,6 @@ pub use console_2::*;
     non_camel_case_types,
 )]
 pub mod console_2 {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/console2.sol/console2.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

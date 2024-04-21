@@ -10,11 +10,6 @@ pub use i_cro_defi_swap_callee::*;
     non_camel_case_types,
 )]
 pub mod i_cro_defi_swap_callee {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/ICroDefiSwapCallee.sol/ICroDefiSwapCallee.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

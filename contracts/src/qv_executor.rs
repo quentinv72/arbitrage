@@ -10,11 +10,6 @@ pub use qv_executor::*;
     non_camel_case_types,
 )]
 pub mod qv_executor {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/BundleExecutor.sol/QVExecutor.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

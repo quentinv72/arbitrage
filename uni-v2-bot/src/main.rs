@@ -6,10 +6,11 @@ use ethers::middleware::{Middleware, SignerMiddleware};
 use ethers::providers::{Http, Provider, Ws};
 use ethers::signers::{LocalWallet, Signer, Wallet};
 use ethers::types::Address;
-use log::LevelFilter;
+use log4rs::{Config, Logger};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Root};
-use log4rs::{Config, Logger};
+use log::LevelFilter;
+
 use pools_graph::pools_graph::PoolsGraph;
 use pools_graph::utils::uniswap_v2_loader::load_uniswap_v2_pairs;
 
@@ -38,10 +39,10 @@ async fn setup() -> (
     Arc<Provider<Ws>>,
 ) {
     setup_logging();
-    let rpc_url = env!("RPC_URL");
-    let ws_url = env!("WS_URL");
+    let rpc_url = std::env::var("RPC_URL").unwrap();
+    let ws_url = std::env::var("WS_URL").unwrap();
     let private_key = "21212";
-    let bundle_executor_address = env!("BUNDLE_EXECUTOR");
+    let bundle_executor_address = std::env::var("BUNDLE_EXECUTOR").unwrap();
     let wallet: LocalWallet = private_key.parse().unwrap();
     let wallet = wallet.with_chain_id(1_u32);
     let http_client = if cfg!(debug_assertions) {

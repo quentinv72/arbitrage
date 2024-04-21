@@ -10,11 +10,6 @@ pub use i_uniswap_v2_callee::*;
     non_camel_case_types,
 )]
 pub mod i_uniswap_v2_callee {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/IUniswapV2Callee.sol/IUniswapV2Callee.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

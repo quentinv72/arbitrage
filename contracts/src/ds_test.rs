@@ -10,11 +10,6 @@ pub use ds_test::*;
     non_camel_case_types,
 )]
 pub mod ds_test {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/test.sol/DSTest.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

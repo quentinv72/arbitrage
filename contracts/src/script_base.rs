@@ -10,11 +10,6 @@ pub use script_base::*;
     non_camel_case_types,
 )]
 pub mod script_base {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/Base.sol/ScriptBase.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

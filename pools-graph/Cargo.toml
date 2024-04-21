@@ -10,6 +10,6 @@ dashmap = "5.5.3"
 ethers = "2.0.14"
 log = { version = "0.4.21", features = [] }
 tokio = "1.37.0"
-contracts = { path = "../contracts" }
+contracts = { git = "ssh://git@github.com/quentinv72/arbitrage.git" }
 serde = { version = "1.0.198", features = ["derive"] }
 reqwest-graphql = "1.0.0"

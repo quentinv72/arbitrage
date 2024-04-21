@@ -10,11 +10,6 @@ pub use bundle_executor_test::*;
     non_camel_case_types,
 )]
 pub mod bundle_executor_test {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/BundleExecutorTest.sol/BundleExecutorTest.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

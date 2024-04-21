@@ -10,11 +10,6 @@ pub use i_uniswap_v2_pair::*;
     non_camel_case_types,
 )]
 pub mod i_uniswap_v2_pair {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/IUniswapV2Pair.sol/IUniswapV2Pair.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

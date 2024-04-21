@@ -10,11 +10,6 @@ pub use std_storage_safe::*;
     non_camel_case_types,
 )]
 pub mod std_storage_safe {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/StdStorage.sol/stdStorageSafe.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

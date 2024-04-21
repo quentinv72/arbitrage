@@ -10,11 +10,6 @@ pub use common_base::*;
     non_camel_case_types,
 )]
 pub mod common_base {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/Base.sol/CommonBase.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {

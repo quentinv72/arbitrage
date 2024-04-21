@@ -10,11 +10,6 @@ pub use std_utils::*;
     non_camel_case_types,
 )]
 pub mod std_utils {
-    const _: () = {
-        ::core::include_bytes!(
-            "/Users/quentin/arbitrage/contracts/src/json_abi/StdUtils.sol/StdUtils.json",
-        );
-    };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {
         ::ethers::core::abi::ethabi::Contract {
