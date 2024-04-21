@@ -6,16 +6,16 @@ use ethers::middleware::{Middleware, SignerMiddleware};
 use ethers::providers::{Http, Provider, Ws};
 use ethers::signers::{LocalWallet, Signer, Wallet};
 use ethers::types::Address;
-use log::{info, warn, LevelFilter};
+use log::{info, LevelFilter, warn};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Logger, Root};
 use log4rs::Config;
 use pools_graph::pools_graph::PoolsGraph;
 use pools_graph::utils::uniswap_v2_loader::load_uniswap_v2_pairs;
 
-const UNISWAP_V2_FACTORIES: [&str; 4] = [
+const UNISWAP_V2_FACTORIES: [&str; 5] = [
     // "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
-    // "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac",
+    "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac",
     "0x0388c1e0f210abae597b7de712b9510c6c36c857",
     "0x9DEB29c9a4c7A88a3C0257393b7f3335338D9A9D",
     "0xbdda21dd8da31d5bee0c9bb886c044ebb9b8906a",
@@ -30,7 +30,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .to_vec();
     let graph = PoolsGraph::new();
     load_uniswap_v2_pairs(&graph, factories, Arc::clone(&http_client)).await?;
-    warn!("Hello world");
     Ok(())
 }
 
@@ -38,7 +37,7 @@ async fn setup() -> (
     Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>,
     Arc<Provider<Ws>>,
 ) {
-    setup_logging();
+    // setup_logging();
     let rpc_url = std::env::var("RPC_URL").unwrap();
     let ws_url = std::env::var("WS_URL").unwrap();
     let private_key = env::var("PRIVATE_KEY").unwrap();
@@ -57,25 +56,4 @@ async fn setup() -> (
     };
     let ws_client = Arc::new(Provider::<Ws>::connect(ws_url).await.unwrap());
     (http_client, ws_client)
-}
-
-fn setup_logging() {
-    let stdout = ConsoleAppender::builder().build();
-    if cfg!(debug_assertions) {
-        let config = Config::builder()
-            .appender(Appender::builder().build("stdout", Box::new(stdout)))
-            .logger(Logger::builder().build("uni_v2_bot", LevelFilter::Debug))
-            .logger(Logger::builder().build("pools_graph", LevelFilter::Info))
-            .build(Root::builder().appender("stdout").build(LevelFilter::Warn))
-            .unwrap();
-        log4rs::init_config(config).expect("Should set up logger in debug mode for app");
-    } else {
-        let config = Config::builder()
-            .appender(Appender::builder().build("stdout", Box::new(stdout)))
-            .logger(Logger::builder().build("uni_v2_bot", LevelFilter::Info))
-            .logger(Logger::builder().build("pools_graph", LevelFilter::Info))
-            .build(Root::builder().appender("stdout").build(LevelFilter::Warn))
-            .unwrap();
-        log4rs::init_config(config).expect("Should set up logger in debug mode for app");
-    }
 }
