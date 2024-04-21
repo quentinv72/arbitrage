@@ -2269,7 +2269,7 @@ checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 [[package]]
 name = "pools-graph"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#bc8980d9d799eea122a234acd7d0c5c844f73076"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#5e0f47f774a8fee98d63c7b86b89d0c694497400"
 dependencies = [
  "contracts",
  "dashmap",
