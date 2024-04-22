@@ -1,13 +1,11 @@
 use log4rs::append::console::ConsoleAppender;
-use log4rs::Config;
 use log4rs::config::{Appender, Logger, Root};
+use log4rs::Config;
 use log::LevelFilter;
 
-use crate::env::Env;
-
-pub fn setup_logging(env: &Env, app_name: &str) {
+pub fn setup_logging(is_production: bool, app_name: &str) {
     let stdout = ConsoleAppender::builder().build();
-    if env.is_staging() {
+    if !is_production {
         let config = Config::builder()
             .appender(Appender::builder().build("stdout", Box::new(stdout)))
             .logger(Logger::builder().build(app_name, LevelFilter::Debug))

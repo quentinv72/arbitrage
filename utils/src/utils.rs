@@ -1,3 +1,4 @@
+use std::env;
 use std::sync::Arc;
 
 use ethers::addressbook::Address;
@@ -6,55 +7,34 @@ use ethers::middleware::{Middleware, SignerMiddleware};
 use ethers::prelude::{Http, LocalWallet, Provider, Wallet, Ws};
 use ethers::signers::Signer;
 use ethers_flashbots::BroadcasterMiddleware;
+use log::{info, warn};
 use url::Url;
 
-pub(crate) type StagingProvider = SignerMiddleware<Provider<Http>, Wallet<SigningKey>>;
-pub(crate) type FlashbotsProvider = SignerMiddleware<BroadcasterMiddleware<Provider<Http>, Wallet<SigningKey>>, Wallet<SigningKey>>;
+use crate::utils::Env::{Production, Staging};
 
+type FlashbotsProvider =
+    SignerMiddleware<BroadcasterMiddleware<Provider<Http>, Wallet<SigningKey>>, Wallet<SigningKey>>;
+static BUILDER_URLS: &[&str] = &[];
 
-pub(crate) struct Utils<M: Middleware> {
-    pub(crate) ws_provider: Arc<Provider<Ws>>,
-    pub(crate) rpc_client: Arc<M>,
-    pub(crate) bundle_executor: Address,
+pub struct Utils<M: Middleware> {
+    ws_client: Arc<Provider<Ws>>,
+    rpc_client: Arc<M>,
+    bundle_executor: Address,
+    env: Env,
 }
 
-pub(crate) trait Setup<M: Middleware> {
+trait Setup<M: Middleware> {
     async fn setup() -> Utils<M>;
 }
 
-impl Setup<StagingProvider> for Utils<StagingProvider> {
-    async fn setup() -> Self {
-        let rpc_url = std::env::var("RPC_URL").unwrap();
-        let ws_url = std::env::var("WS_URL").unwrap();
-        let private_key = std::env::var("PRIVATE_KEY").unwrap();
-        let bundle_executor_address = std::env::var("BUNDLE_EXECUTOR").unwrap();
-        let wallet: LocalWallet = private_key.parse().unwrap();
-        let wallet = wallet.with_chain_id(1_u32);
-        let provider = Provider::<Http>::try_from(rpc_url).unwrap();
-        let client = SignerMiddleware::new(provider, wallet);
-        let client = Arc::new(client);
-        let ws_client = Arc::new(Provider::<Ws>::connect(ws_url).await.unwrap());
-        Self {
-            ws_provider: ws_client,
-            rpc_client: client,
-            bundle_executor: bundle_executor_address.parse().unwrap(),
-        }
-    }
-}
-
-static BUILDER_URLS: &[&str] = &[];
-
 impl Setup<FlashbotsProvider> for Utils<FlashbotsProvider> {
     async fn setup() -> Self {
-        let rpc_url = std::env::var("RPC_URL").unwrap();
-        let ws_url = std::env::var("WS_URL").unwrap();
-        let private_key = std::env::var("PRIVATE_KEY").unwrap();
-        let relay_signer = std::env::var("RELAY_SIGNER").unwrap();
-        let bundle_executor_address = std::env::var("BUNDLE_EXECUTOR").unwrap();
-        let wallet: LocalWallet = private_key.parse().unwrap();
-        let wallet = wallet.with_chain_id(1_u32);
-        let relay_wallet: LocalWallet = relay_signer.parse().unwrap();
-        let provider = Provider::<Http>::try_from(rpc_url).unwrap();
+        let vars = Vars::init();
+        let tx_signing_wallet: LocalWallet = vars.tx_signing_private_key.unwrap().parse().unwrap();
+        let tx_signing_wallet = tx_signing_wallet.with_chain_id(1_u32);
+        let bundle_signing_wallet: LocalWallet =
+            vars.bundle_signing_private_key.unwrap().parse().unwrap();
+        let provider = Provider::<Http>::try_from(vars.rpc_url.unwrap()).unwrap();
         let client = SignerMiddleware::new(
             BroadcasterMiddleware::new(
                 provider,
@@ -63,17 +43,87 @@ impl Setup<FlashbotsProvider> for Utils<FlashbotsProvider> {
                     .map(|url| Url::parse(url).unwrap())
                     .collect(),
                 Url::parse("https://relay.flashbots.net").unwrap(),
-                relay_wallet,
+                bundle_signing_wallet,
             ),
-            wallet,
+            tx_signing_wallet,
         );
         let client = Arc::new(client);
-        let ws_client = Arc::new(Provider::<Ws>::connect(ws_url).await.unwrap());
+        let ws_client = Arc::new(Provider::<Ws>::connect(vars.ws_url.unwrap()).await.unwrap());
         Self {
-            ws_provider: ws_client,
+            env: Env::get_env(),
+            ws_client: ws_client,
             rpc_client: client,
-            bundle_executor: bundle_executor_address.parse().unwrap(),
+            bundle_executor: vars.bundle_executor_address.unwrap().parse().unwrap(),
         }
     }
 }
 
+impl<M: Middleware> Utils<M> {
+    pub fn get_rpc_client(&self) -> Arc<M> {
+        Arc::clone(&self.rpc_client)
+    }
+
+    pub fn get_ws_client(&self) -> Arc<Provider<Ws>> {
+        Arc::clone(&self.ws_client)
+    }
+
+    pub fn get_bundle_executor_address(&self) -> Address {
+        self.bundle_executor
+    }
+
+    pub fn is_production(&self) -> bool {
+        match self.env {
+            Production => true,
+            Staging => false,
+        }
+    }
+
+    pub fn is_staging(&self) -> bool {
+        !self.is_production()
+    }
+}
+
+struct Vars {
+    rpc_url: Option<String>,
+    ws_url: Option<String>,
+    tx_signing_private_key: Option<String>,
+    bundle_signing_private_key: Option<String>,
+    bundle_executor_address: Option<String>,
+}
+
+impl Vars {
+    fn init() -> Self {
+        Vars {
+            rpc_url: std::env::var("RPC_URL").ok(),
+            ws_url: std::env::var("WS_URL").ok(),
+            tx_signing_private_key: std::env::var("TX_PRIVATE_KEY").ok(),
+            bundle_signing_private_key: std::env::var("BUNDLE_PRIVATE_KEY").ok(),
+            bundle_executor_address: std::env::var("BUNDLE_EXECUTOR").ok(),
+        }
+    }
+}
+
+enum Env {
+    Production,
+    Staging,
+}
+
+impl Env {
+    fn get_env() -> Self {
+        match env::var("ENV") {
+            Ok(val) => {
+                let lowercase = val.to_lowercase();
+                if lowercase == "prod" || lowercase == "production" {
+                    info!("We are in production baby");
+                    Production
+                } else {
+                    Staging
+                }
+            }
+            Err(e) => {
+                warn!("Couldn't find ENV key, setting env to staging... \n {e}");
+                Staging
+            }
+        }
+    }
+}
