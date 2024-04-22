@@ -336,7 +336,10 @@ checksum = "a21f936df1771bf62b77f047b726c4625ff2e8aa607c01ec06e5a05bd8463401"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
+ "js-sys",
  "num-traits",
+ "serde",
+ "wasm-bindgen",
  "windows-targets 0.52.5",
 ]
 
@@ -430,7 +433,7 @@ checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 [[package]]
 name = "contracts"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#5e0f47f774a8fee98d63c7b86b89d0c694497400"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#5f037d592f5f0cfd73d80bb3ecdd6ae323326064"
 dependencies = [
  "convert_case",
  "ethers",
@@ -778,7 +781,7 @@ dependencies = [
  "sha2",
  "sha3",
  "thiserror",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -960,6 +963,26 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tracing",
+]
+
+[[package]]
+name = "ethers-flashbots"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d18fef87b4918a3bec3d7bc08daf0b0b6851b0392eb2329d414269e7cba8adf4"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "ethers",
+ "futures-core",
+ "futures-util",
+ "pin-project",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "url",
+ "uuid 1.8.0",
 ]
 
 [[package]]
@@ -2269,7 +2292,7 @@ checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 [[package]]
 name = "pools-graph"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#5e0f47f774a8fee98d63c7b86b89d0c694497400"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#5f037d592f5f0cfd73d80bb3ecdd6ae323326064"
 dependencies = [
  "contracts",
  "dashmap",
@@ -3319,8 +3342,10 @@ checksum = "212d5dcb2a1ce06d81107c3d0ffa3121fe974b73f068c8282cb1c32328113b6c"
 dependencies = [
  "futures-util",
  "log",
+ "native-tls",
  "rustls",
  "tokio",
+ "tokio-native-tls",
  "tokio-rustls",
  "tungstenite",
  "webpki-roots",
@@ -3472,6 +3497,7 @@ dependencies = [
  "http",
  "httparse",
  "log",
+ "native-tls",
  "rand",
  "rustls",
  "sha1",
@@ -3522,6 +3548,7 @@ dependencies = [
  "log4rs",
  "pools-graph",
  "tokio",
+ "utils",
 ]
 
 [[package]]
@@ -3602,6 +3629,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
 
 [[package]]
+name = "utils"
+version = "0.1.0"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#5f037d592f5f0cfd73d80bb3ecdd6ae323326064"
+dependencies = [
+ "ethers",
+ "ethers-flashbots",
+ "log",
+ "log4rs",
+ "url",
+]
+
+[[package]]
 name = "uuid"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3610,6 +3649,12 @@ dependencies = [
  "getrandom",
  "serde",
 ]
+
+[[package]]
+name = "uuid"
+version = "1.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a183cf7feeba97b4dd1c0d46788634f6221d87fa961b305bed08c851829efcc0"
 
 [[package]]
 name = "vcpkg"

@@ -43,10 +43,17 @@ impl Env {
         }
     }
 
-    pub fn get_rpc_client<M: Middleware>(&self) -> Arc<M> {
+    pub fn get_prod_rpc_client(&self) -> Option<Arc<FlashbotsProvider>> {
         match self {
-            Production(inner) => Arc::clone(&inner.rpc_client),
-            Staging(inner) => Arc::clone(&inner.rpc_client)
+            Production(inner) => Some(Arc::clone(&inner.rpc_client)),
+            Staging(_) => None
+        }
+    }
+
+    pub fn get_staging_rpc_client(&self) -> Option<Arc<StagingProvider>> {
+        match self {
+            Staging(inner) => Some(Arc::clone(&inner.rpc_client)),
+            Production(_) => None
         }
     }
 
