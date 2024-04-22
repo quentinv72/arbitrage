@@ -70,7 +70,6 @@ pub async fn refresh_reserves<M: Middleware>(
         }
         TryResult::Absent => panic!("{pair_address} not found in pools graph..."),
         TryResult::Locked => {
-            debug!("Value locked for pair {pair_address}...");
             Ok(())
         }
     }
