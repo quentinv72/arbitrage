@@ -433,7 +433,7 @@ checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 [[package]]
 name = "contracts"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#06be8b2b46d45f5892a6548701a37208b6945efc"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#6c72b8df1a3ee77ce5c49fa84e4d256424e1ddcb"
 dependencies = [
  "convert_case",
  "ethers",
@@ -1665,9 +1665,9 @@ checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
 
 [[package]]
 name = "jobserver"
-version = "0.1.30"
+version = "0.1.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "685a7d121ee3f65ae4fddd72b25a04bb36b6af81bc0828f7d5434c0fe60fa3a2"
+checksum = "d2b099aaa34a9751c5bf0878add70444e1ed2dd73f347be99003d4577277de6e"
 dependencies = [
  "libc",
 ]
@@ -2292,7 +2292,7 @@ checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 [[package]]
 name = "pools-graph"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#06be8b2b46d45f5892a6548701a37208b6945efc"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#6c72b8df1a3ee77ce5c49fa84e4d256424e1ddcb"
 dependencies = [
  "contracts",
  "dashmap",
@@ -2669,9 +2669,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.33"
+version = "0.38.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3cc72858054fcff6d7dea32df2aeaee6a7c24227366d7ea429aada2f26b16ad"
+checksum = "70dc5ec042f7a43c4a73241207cecc9873a06d45debb38b329f8541d85c2730f"
 dependencies = [
  "bitflags 2.5.0",
  "errno",
@@ -3631,8 +3631,9 @@ checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
 [[package]]
 name = "utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#06be8b2b46d45f5892a6548701a37208b6945efc"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#6c72b8df1a3ee77ce5c49fa84e4d256424e1ddcb"
 dependencies = [
+ "either",
  "ethers",
  "ethers-flashbots",
  "log",

@@ -9,7 +9,7 @@ pub fn setup_logging(is_production: bool, app_name: &str) {
         let config = Config::builder()
             .appender(Appender::builder().build("stdout", Box::new(stdout)))
             .logger(Logger::builder().build(app_name, LevelFilter::Debug))
-            .logger(Logger::builder().build("pools_graph", LevelFilter::Info))
+            .logger(Logger::builder().build("pools_graph", LevelFilter::Debug))
             .build(Root::builder().appender("stdout").build(LevelFilter::Warn))
             .unwrap();
         log4rs::init_config(config).expect("Should set up logger in debug mode for app");

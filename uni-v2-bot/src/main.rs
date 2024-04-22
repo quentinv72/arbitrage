@@ -1,12 +1,11 @@
-use std::sync::Arc;
-
 use ethers::middleware::Middleware;
-use ethers::signers::Signer;
+use ethers::providers::StreamExt;
 use ethers::types::Address;
+use log::{debug, info};
 use pools_graph::pools_graph::PoolsGraph;
-use pools_graph::utils::uniswap_v2_loader::load_uniswap_v2_pairs;
-use utils::env::Env;
+use pools_graph::utils::uniswap_v2;
 use utils::logging::setup_logging;
+use utils::utils::{Setup, Utils};
 
 const UNISWAP_V2_FACTORIES: [&str; 5] = [
     // "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
@@ -17,16 +16,71 @@ const UNISWAP_V2_FACTORIES: [&str; 5] = [
     "0x1097053Fd2ea711dad45caCcc45EfF7548fCB362",
 ];
 
+const WETH: &str = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+
+// There is probably some env variable that I can use here...
+const APP_NAME: &str = "uni_v2_bot";
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let env = Env::get_env().await;
-    setup_logging(&env, "uni_v2_bot");
-    // figure out a way to pick clinet based on environment
-    let client = env.get_staging_rpc_client().unwrap();
+    let utils = Utils::setup().await;
+    setup_logging(utils.is_production(), APP_NAME);
     let factories = UNISWAP_V2_FACTORIES
         .map(|x| x.parse::<Address>().unwrap())
         .to_vec();
     let graph = PoolsGraph::new();
-    load_uniswap_v2_pairs(&graph, factories, Arc::clone(&client)).await?;
+    uniswap_v2::load_uniswap_v2_pairs(&graph, factories, utils.get_rpc_client()).await?;
+    let paths = get_paths_2(&graph, WETH.parse()?);
+    info!("Found {} paths", paths.len());
+    let ws_client = utils.get_ws_client();
+    let mut stream = ws_client.subscribe_blocks().await?;
+    while let Some(block) = stream.next().await {
+        let block_number = block.number.unwrap();
+        info!("Block number: {}", block_number);
+        for path in &paths {
+            let input_address = path.0;
+            let output_address = path.1;
+            uniswap_v2::refresh_reserves(
+                &graph,
+                &input_address,
+                block_number,
+                utils.get_rpc_client(),
+            )
+            .await?;
+            uniswap_v2::refresh_reserves(
+                &graph,
+                &output_address,
+                block_number,
+                utils.get_rpc_client(),
+            )
+            .await?;
+        }
+    }
     Ok(())
+}
+
+// Finds all paths of size 2 starting with a given token and outputting the same token
+// A path is exchange_a_addr -> exchange_b_addr, where exchange_a and exchange_b have the
+// pairs (start_token/other).
+fn get_paths_2(pools_graph: &PoolsGraph, start_token: Address) -> Vec<(Address, Address)> {
+    let tokens = pools_graph
+        .get_neighbouring_tokens(&start_token)
+        .expect("WETH token should have neighbours...");
+    let mut results = Vec::new();
+    for token in tokens.iter() {
+        let exchanges = pools_graph
+            .get_pool_addresses(start_token, *token)
+            .expect("Pair should have at least one exchange");
+        if exchanges.len() == 1 {
+            continue;
+        }
+        for pair_addr in exchanges.iter() {
+            for pair_other_addr in exchanges.iter() {
+                if *pair_addr != *pair_other_addr {
+                    results.push((Address::from(pair_addr.0), Address::from(pair_other_addr.0)))
+                }
+            }
+        }
+    }
+    results
 }
