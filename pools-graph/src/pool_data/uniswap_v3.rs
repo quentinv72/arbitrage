@@ -4,6 +4,7 @@ use std::sync::Arc;
 use contracts::i_uniswap_v_3_pool::IUniswapV3Pool;
 use ethers::contract::ContractError;
 use ethers::middleware::Middleware;
+use ethers::prelude::U64;
 use ethers::types::{Address, U256};
 
 use crate::pool_data::pool_data::PoolData;
@@ -16,6 +17,7 @@ pub struct UniswapV3 {
     token_0: Address,
     token_1: Address,
     fee_tier: u32,
+    block_last_updates: U64,
 }
 
 impl UniswapV3 {
@@ -34,6 +36,7 @@ impl UniswapV3 {
             token_0,
             token_1,
             fee_tier,
+            block_last_updates: U64::zero(),
         }
     }
 
@@ -54,6 +57,7 @@ impl UniswapV3 {
             token_0,
             token_1,
             fee_tier,
+            block_last_updates: U64::zero(),
         })
     }
 }
@@ -73,5 +77,9 @@ impl PoolData for UniswapV3 {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn get_last_block_update(&self) -> U64 {
+        self.block_last_updates
     }
 }

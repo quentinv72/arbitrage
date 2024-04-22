@@ -89,4 +89,8 @@ impl PoolData for UniswapV2 {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
+
+    fn get_last_block_update(&self) -> U64 {
+        self.block_last_updated
+    }
 }
