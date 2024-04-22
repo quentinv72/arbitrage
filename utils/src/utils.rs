@@ -23,7 +23,7 @@ pub struct Utils<M: Middleware> {
     env: Env,
 }
 
-trait Setup<M: Middleware> {
+pub trait Setup<M: Middleware> {
     async fn setup() -> Utils<M>;
 }
 
