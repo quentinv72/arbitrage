@@ -20,10 +20,10 @@ const UNISWAP_V2_FACTORIES: [&str; 5] = [
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let env = Env::get_env().await;
-    setup_logging(env, "uni_v2_bot");
+    setup_logging(&env, "uni_v2_bot");
     // figure out a way to pick clinet based on environment
     let client = env.get_staging_rpc_client().unwrap();
-    let factories: Vec<Address> = UNISWAP_V2_FACTORIES
+    let factories = UNISWAP_V2_FACTORIES
         .map(|x| x.parse::<Address>().unwrap())
         .to_vec();
     let graph = PoolsGraph::new();

@@ -1,5 +1,6 @@
 use std::env;
 use std::sync::{Arc, BarrierWaitResult};
+use either::{Either, Left, Right};
 
 use ethers::prelude::Provider;
 use ethers::providers::{Middleware, Ws};
@@ -43,17 +44,10 @@ impl Env {
         }
     }
 
-    pub fn get_prod_rpc_client(&self) -> Option<Arc<FlashbotsProvider>> {
+    pub fn get_rpc_client(&self) -> Either<Arc<FlashbotsProvider>, Arc<StagingProvider>> {
         match self {
-            Production(inner) => Some(Arc::clone(&inner.rpc_client)),
-            Staging(_) => None
-        }
-    }
-
-    pub fn get_staging_rpc_client(&self) -> Option<Arc<StagingProvider>> {
-        match self {
-            Staging(inner) => Some(Arc::clone(&inner.rpc_client)),
-            Production(_) => None
+            Production(inner) => Left(Arc::clone(&inner.rpc_client)),
+            Staging(inner) => Right(Arc::clone(&inner.rpc_client))
         }
     }
 
