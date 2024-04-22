@@ -1,4 +1,5 @@
 use dashmap::{DashMap, DashSet};
+use dashmap::mapref::one::Ref;
 use ethers::types::Address;
 
 use crate::pool_data::pool_data::PoolData;
@@ -18,6 +19,18 @@ impl PoolsGraph {
             _weights: DashMap::new(),
             _neighbouring_erc20_tokens: DashMap::new(),
         }
+    }
+
+    pub fn get_pool_data(&self, pool_address: &Address) -> Option<Ref<Address, Box<dyn PoolData>>> {
+        self._pool_address_to_pool_data.get(pool_address)
+    }
+
+    pub fn get_neighbouring_tokens(&self, token_address: &Address) -> Option<Ref<Address, DashSet<Address>>> {
+        self._neighbouring_erc20_tokens.get(token_address)
+    }
+
+    pub fn get_pool_addresses(&self, token_0: Address, token_1: Address) -> Option<Ref<(Address, Address), DashSet<Address>>> {
+        self._weights.get(&(token_0, token_1))
     }
 
     pub(crate) fn insert(&self, pool_data: Box<dyn PoolData>) {
@@ -151,5 +164,12 @@ mod tests {
                 .value().get_pool_address(),
             address_2
         );
+
+        assert!(graph.get_pool_data(&address_1).is_some());
+        assert!(graph.get_pool_data(&token_c).is_none());
+        assert!(graph.get_neighbouring_tokens(&token_a).unwrap().contains(&token_c));
+        assert!(graph.get_neighbouring_tokens(&token_c).unwrap().contains(&token_a));
+        assert!(graph.get_pool_addresses(token_a, token_b).unwrap().contains(&address_1));
+        assert!(graph.get_pool_addresses(token_a, token_a).is_none());
     }
 }
