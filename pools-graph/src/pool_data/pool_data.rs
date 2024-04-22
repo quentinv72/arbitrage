@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 
 use ethers::types::{Address, U64};
 
-pub trait PoolData {
+pub trait PoolData: Send + Sync {
     fn get_tokens(&self) -> (Address, Address);
     fn get_pool_address(&self) -> Address;
     fn as_any(&self) -> &dyn Any;

@@ -6,7 +6,7 @@ use ethers::types::Address;
 use crate::pool_data::pool_data::PoolData;
 
 pub struct PoolsGraph {
-    _pool_address_to_pool_data: DashMap<Address, Box<dyn PoolData + Send + Sync>>,
+    _pool_address_to_pool_data: DashMap<Address, Box<dyn PoolData>>,
     // ERC-20 token -> Set<ERC-20 token>
     _neighbouring_erc20_tokens: DashMap<Address, DashSet<Address>>,
     // (ERC-20 token, ERC-20 token) -> Pool Address
