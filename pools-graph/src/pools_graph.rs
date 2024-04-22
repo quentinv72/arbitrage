@@ -1,5 +1,6 @@
 use dashmap::{DashMap, DashSet};
-use dashmap::mapref::one::Ref;
+use dashmap::mapref::one::{Ref, RefMut};
+use dashmap::try_result::TryResult;
 use ethers::types::Address;
 
 use crate::pool_data::pool_data::PoolData;
@@ -23,6 +24,10 @@ impl PoolsGraph {
 
     pub fn get_pool_data(&self, pool_address: &Address) -> Option<Ref<Address, Box<dyn PoolData>>> {
         self._pool_address_to_pool_data.get(pool_address)
+    }
+
+    pub fn get_mut_pool_data(&self, pool_address: &Address) -> TryResult<RefMut<Address, Box<dyn PoolData>>> {
+        self._pool_address_to_pool_data.try_get_mut(pool_address)
     }
 
     pub fn get_neighbouring_tokens(&self, token_address: &Address) -> Option<Ref<Address, DashSet<Address>>> {

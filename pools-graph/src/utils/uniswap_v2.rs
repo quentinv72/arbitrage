@@ -1,11 +1,15 @@
+use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
+use contracts::i_uniswap_v_2_factory::IUniswapV2Factory;
+use dashmap::mapref::one::RefMut;
+use dashmap::try_result::TryResult;
+use ethers::contract::ContractError;
+use ethers::prelude::U64;
 use ethers::providers::Middleware;
 use ethers::types::{Address, U256};
 use log::{debug, error, info};
-
-use contracts::i_uniswap_v_2_factory::IUniswapV2Factory;
 
 use crate::pool_data::uniswap_v2::UniswapV2;
 use crate::pools_graph::PoolsGraph;
@@ -46,4 +50,28 @@ pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
     let elapsed = start.elapsed();
     info!("It took {elapsed:.2?} to load all V2 markets");
     Ok(())
+}
+
+pub async fn refresh_reserves<M: Middleware>(
+    pools_graph: &PoolsGraph,
+    pair_address: &Address,
+    current_block: U64,
+    client: Arc<M>,
+) -> Result<(), ContractError<M>> {
+    match pools_graph.get_mut_pool_data(pair_address) {
+        TryResult::Present(mut value) => {
+            let value = value.as_any_mut();
+            match value.downcast_mut::<UniswapV2>() {
+                None => panic!("Refreshing reserves is being called on a non-Uni V2 pool..."),
+                Some(val) => val.maybe_refresh_reserves(current_block, client).await?
+            }
+
+            Ok(())
+        }
+        TryResult::Absent => panic!("{pair_address} not found in pools graph..."),
+        TryResult::Locked => {
+            debug!("Value locked for pair {pair_address}...");
+            Ok(())
+        }
+    }
 }

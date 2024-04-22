@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
@@ -6,6 +7,8 @@ use ethers::types::Address;
 pub trait PoolData {
     fn get_tokens(&self) -> (Address, Address);
     fn get_pool_address(&self) -> Address;
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 impl Hash for dyn PoolData {

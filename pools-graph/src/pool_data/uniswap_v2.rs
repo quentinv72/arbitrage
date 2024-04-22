@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::sync::Arc;
 
 use contracts::i_uniswap_v_2_pair::IUniswapV2Pair;
@@ -52,6 +53,24 @@ impl UniswapV2 {
             }
         )
     }
+
+
+    pub async fn maybe_refresh_reserves<M: Middleware>(
+        &mut self,
+        current_block: U64,
+        client: Arc<M>,
+    ) -> Result<(), ContractError<M>> {
+        if self.block_last_updated == current_block {
+            Ok(())
+        } else {
+            let pair_contract = IUniswapV2Pair::new(self.pair_address, client);
+            let (reserve_0, reserve_1, _) = pair_contract.get_reserves().call().await?;
+            self.reserve_0 = reserve_0;
+            self.reserve_1 = reserve_1;
+            self.block_last_updated = current_block;
+            Ok(())
+        }
+    }
 }
 
 impl PoolData for UniswapV2 {
@@ -61,5 +80,13 @@ impl PoolData for UniswapV2 {
 
     fn get_pool_address(&self) -> Address {
         self.pair_address
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

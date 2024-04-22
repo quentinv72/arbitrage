@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::sync::Arc;
 
 use contracts::i_uniswap_v_3_pool::IUniswapV3Pool;
@@ -64,5 +65,13 @@ impl PoolData for UniswapV3 {
 
     fn get_pool_address(&self) -> Address {
         self.pool_address
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
