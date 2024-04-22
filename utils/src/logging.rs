@@ -5,7 +5,7 @@ use log::LevelFilter;
 
 use crate::env::Env;
 
-pub fn setup_logging(env: Env, app_name: &str) {
+pub fn setup_logging(env: &Env, app_name: &str) {
     let stdout = ConsoleAppender::builder().build();
     if env.is_staging() {
         let config = Config::builder()

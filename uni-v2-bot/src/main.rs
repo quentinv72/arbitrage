@@ -1,17 +1,12 @@
-use std::env;
 use std::sync::Arc;
 
-use ethers::core::k256::ecdsa::SigningKey;
-use ethers::middleware::{Middleware, SignerMiddleware};
-use ethers::providers::{Http, Provider, Ws};
-use ethers::signers::{LocalWallet, Signer, Wallet};
+use ethers::middleware::Middleware;
+use ethers::signers::Signer;
 use ethers::types::Address;
-use log::{info, LevelFilter, warn};
-use log4rs::append::console::ConsoleAppender;
-use log4rs::config::{Appender, Logger, Root};
-use log4rs::Config;
 use pools_graph::pools_graph::PoolsGraph;
 use pools_graph::utils::uniswap_v2_loader::load_uniswap_v2_pairs;
+use utils::env::Env;
+use utils::logging::setup_logging;
 
 const UNISWAP_V2_FACTORIES: [&str; 5] = [
     // "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
@@ -24,36 +19,14 @@ const UNISWAP_V2_FACTORIES: [&str; 5] = [
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (http_client, ws_client) = setup().await;
+    let env = Env::get_env().await;
+    setup_logging(env, "uni_v2_bot");
+    // figure out a way to pick clinet based on environment
+    let client = env.get_staging_rpc_client().unwrap();
     let factories: Vec<Address> = UNISWAP_V2_FACTORIES
         .map(|x| x.parse::<Address>().unwrap())
         .to_vec();
     let graph = PoolsGraph::new();
-    load_uniswap_v2_pairs(&graph, factories, Arc::clone(&http_client)).await?;
+    load_uniswap_v2_pairs(&graph, factories, Arc::clone(&client)).await?;
     Ok(())
-}
-
-async fn setup() -> (
-    Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>,
-    Arc<Provider<Ws>>,
-) {
-    // setup_logging();
-    let rpc_url = std::env::var("RPC_URL").unwrap();
-    let ws_url = std::env::var("WS_URL").unwrap();
-    let private_key = env::var("PRIVATE_KEY").unwrap();
-    let bundle_executor_address = std::env::var("BUNDLE_EXECUTOR").unwrap();
-    let wallet: LocalWallet = private_key.parse().unwrap();
-    let wallet = wallet.with_chain_id(1_u32);
-    let http_client = if cfg!(debug_assertions) {
-        let provider = Provider::<Http>::try_from(rpc_url).unwrap();
-        let client = SignerMiddleware::new(provider, wallet);
-        Arc::new(client)
-    } else {
-        //TODO change to flashbots
-        let provider = Provider::<Http>::try_from(rpc_url).unwrap();
-        let client = SignerMiddleware::new(provider, wallet);
-        Arc::new(client)
-    };
-    let ws_client = Arc::new(Provider::<Ws>::connect(ws_url).await.unwrap());
-    (http_client, ws_client)
 }
