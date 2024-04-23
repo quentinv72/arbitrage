@@ -59,16 +59,18 @@ pub async fn refresh_reserves<M: Middleware>(
     client: Arc<M>,
 ) -> Result<(), ContractError<M>> {
     match pools_graph.get_mut_pool_data(pair_address) {
-        None => panic!("No pool at address {pair_address}"),
-        Some(mut val) => {
-            let val = val.as_any_mut();
-            match val.downcast_mut::<UniswapV2>() {
+        TryResult::Present(mut value) => {
+            let value = value.as_any_mut();
+            match value.downcast_mut::<UniswapV2>() {
                 None => panic!("Refreshing reserves is being called on a non-Uni V2 pool..."),
-                Some(val) => {
-                    val.maybe_refresh_reserves(current_block, client).await?;
-                    Ok(())
-                }
+                Some(val) => val.maybe_refresh_reserves(current_block, client).await?
             }
+
+            Ok(())
+        }
+        TryResult::Absent => panic!("{pair_address} not found in pools graph..."),
+        TryResult::Locked => {
+            Ok(())
         }
     }
 }
