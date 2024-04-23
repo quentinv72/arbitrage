@@ -82,4 +82,8 @@ impl PoolData for UniswapV3 {
     fn get_last_block_update(&self) -> U64 {
         self.block_last_updates
     }
+
+    fn get_amount_out(&self, amount_in: U256, zero_for_one: bool) -> U256 {
+        todo!("V3 amount out not implemented")
+    }
 }

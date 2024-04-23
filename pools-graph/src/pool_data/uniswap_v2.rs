@@ -1,10 +1,12 @@
 use std::any::Any;
+use std::ops::{Div, Mul};
 use std::sync::Arc;
 
 use contracts::i_uniswap_v_2_pair::IUniswapV2Pair;
 use ethers::middleware::Middleware;
-use ethers::prelude::ContractError;
+use ethers::prelude::{ContractError, U256};
 use ethers::types::{Address, U64};
+use log::warn;
 
 use crate::pool_data::pool_data::PoolData;
 
@@ -71,6 +73,17 @@ impl UniswapV2 {
             Ok(())
         }
     }
+
+    fn get_amount_out(amount_in: U256, reserve_in: U256, reserve_out: U256) -> U256 {
+        let amount_in_with_fee = amount_in.mul(U256::from(997));
+        let numerator = amount_in_with_fee.mul(reserve_out);
+        let denominator = (reserve_in.mul(U256::from(1_000))) + (amount_in_with_fee);
+        if denominator.is_zero() {
+            warn!("amount in: {amount_in}, reserve in: {reserve_in}, reserve out: {reserve_out}");
+            return U256::from(0);
+        }
+        numerator.div(denominator)
+    }
 }
 
 impl PoolData for UniswapV2 {
@@ -92,5 +105,11 @@ impl PoolData for UniswapV2 {
 
     fn get_last_block_update(&self) -> U64 {
         self.block_last_updated
+    }
+
+    fn get_amount_out(&self, amount_in: U256, zero_for_one: bool) -> U256 {
+        let reserve_in = if zero_for_one { self.reserve_0 } else { self.reserve_1 };
+        let reserve_out = if zero_for_one { self.reserve_1 } else { self.reserve_0 };
+        Self::get_amount_out(amount_in, U256::from(reserve_in), U256::from(reserve_out))
     }
 }
