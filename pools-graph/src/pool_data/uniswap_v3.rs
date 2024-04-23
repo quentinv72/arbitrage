@@ -86,4 +86,16 @@ impl PoolData for UniswapV3 {
     fn get_amount_out(&self, amount_in: U256, zero_for_one: bool) -> U256 {
         todo!("V3 amount out not implemented")
     }
+    //
+    // fn build_swap_calldata<M: Middleware>(
+    //     &self,
+    //     amount_in: U256,
+    //     amount_out: U256,
+    //     zero_for_one: bool,
+    //     data: Bytes,
+    //     client: Arc<M>,
+    //     bundle_executor_address: Address,
+    // ) -> Bytes {
+    //     todo!("V3 swap calldata not implemented")
+    // }
 }
