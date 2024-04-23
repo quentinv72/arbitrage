@@ -9,7 +9,7 @@ use ethers::contract::ContractError;
 use ethers::prelude::U64;
 use ethers::providers::Middleware;
 use ethers::types::{Address, U256};
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 
 use crate::pool_data::uniswap_v2::UniswapV2;
 use crate::pools_graph::PoolsGraph;
@@ -70,6 +70,7 @@ pub async fn refresh_reserves<M: Middleware>(
         }
         TryResult::Absent => panic!("{pair_address} not found in pools graph..."),
         TryResult::Locked => {
+            warn!("{pair_address} is locked...");
             Ok(())
         }
     }
