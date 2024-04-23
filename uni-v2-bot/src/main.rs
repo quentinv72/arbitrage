@@ -1,12 +1,15 @@
+use std::cmp::max;
 use std::collections::HashSet;
+use std::ops::{Div, Mul};
 use std::sync::Arc;
 
 use ethers::abi::Hash;
 use ethers::middleware::Middleware;
 use ethers::prelude::ContractError;
 use ethers::providers::StreamExt;
-use ethers::types::{Address, U64};
-use log::{info, warn};
+use ethers::types::{Address, U256, U64};
+use log::{error, info, warn};
+use pools_graph::pool_data::uniswap_v2::UniswapV2;
 use pools_graph::pools_graph::PoolsGraph;
 use pools_graph::utils::uniswap_v2;
 use tokio::task::JoinSet;
@@ -28,6 +31,8 @@ const WETH: &str = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 // There is probably some env variable that I can use here...
 const APP_NAME: &str = "uni_v2_bot";
 
+const STEP_SIZE: u32 = 10000;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let utils = Utils::setup().await;
@@ -45,7 +50,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let block_number = block.number.unwrap();
         info!("Block number: {}", block_number);
         update_reserves(block_number, &paths, graph.clone(), utils.get_rpc_client()).await?;
+        for path in &paths {
+            let zero_for_one = path.0 == WETH.parse()?;
+            let (input_reserve_in, input_reserve_out) =
+                get_uniswap_v2_pair_reserves(&path.0, &graph, zero_for_one);
+            let (output_reserve_in, output_reserve_out) =
+                get_uniswap_v2_pair_reserves(&path.1, &graph, zero_for_one);
+            let max_amount_in = max_amount_in(
+                input_reserve_in,
+                input_reserve_out,
+                output_reserve_in,
+                output_reserve_out,
+            );
+            if max_amount_in > U256::zero() {
+                let (amount_in_first, amount_out_first, amount_out_second, profit) =
+                    calculate_profit(&graph, &path.0, &path.1, max_amount_in, zero_for_one);
+                info!("Profit of {profit} wei");
+            }
+        }
     }
+
+    let client = utils.get_rpc_client();
+
     Ok(())
 }
 
@@ -90,4 +116,90 @@ async fn update_reserves<M: Middleware>(
             .await?;
     }
     Ok(())
+}
+
+fn get_uniswap_v2_pair_reserves(
+    pair_address: &Address,
+    pools_graph: &PoolsGraph,
+    zero_for_one: bool,
+) -> (U256, U256) {
+    match pools_graph
+        .get_pool_data(pair_address)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<UniswapV2>()
+    {
+        None => panic!("Should be a uniswap V2 pair"),
+        Some(val) => {
+            let (reserve_0, reserve_1) = val.get_reserves();
+            if zero_for_one {
+                (U256::from(reserve_0), U256::from(reserve_1))
+            } else {
+                (U256::from(reserve_1), U256::from(reserve_0))
+            }
+        }
+    }
+}
+
+fn has_arbitrage(
+    input_reserve_in: U256,
+    input_reserve_out: U256,
+    output_reserve_in: U256,
+    output_reserve_out: U256,
+) -> bool {
+    let upper_bound = U256::from(994009)
+        .mul(input_reserve_out)
+        .mul(output_reserve_out)
+        .div(U256::from(1000000).mul(input_reserve_in));
+    output_reserve_in < upper_bound
+}
+
+fn max_amount_in(
+    input_reserve_in: U256,
+    input_reserve_out: U256,
+    output_reserve_in: U256,
+    output_reserve_out: U256,
+) -> U256 {
+    let a = U256::from(994_009)
+        .mul(input_reserve_out)
+        .mul(output_reserve_out);
+    let b = U256::from(1_000_000)
+        .mul(input_reserve_in)
+        .mul(output_reserve_in);
+    if a < b {
+        return U256::zero();
+    }
+    let numerator = a - b;
+    let c = U256::from(997).mul(input_reserve_out) + U256::from(1_000).mul(output_reserve_in);
+    let denominator = U256::from(997).mul(c);
+    numerator.div(denominator)
+}
+
+fn calculate_profit(
+    pools_graph: &PoolsGraph,
+    input_pair_address: &Address,
+    output_pair_address: &Address,
+    max_amount_in: U256,
+    zero_for_one: bool,
+) -> (U256, U256, U256, U256) {
+    let mut i = U256::one();
+    let step_size = max_amount_in.div(U256::from(STEP_SIZE));
+    let mut profit = U256::zero();
+    let mut amount_in_first = U256::zero();
+    let mut amount_out_first = U256::zero();
+    let mut amount_out_second = U256::zero();
+    let input_pair = pools_graph.get_pool_data(input_pair_address).unwrap();
+    let output_pair = pools_graph.get_pool_data(output_pair_address).unwrap();
+    while i < max_amount_in {
+        let a = input_pair.get_amount_out(i, zero_for_one);
+        let b = output_pair.get_amount_out(a, !zero_for_one);
+        if b > i && b - i > profit {
+            amount_in_first = i;
+            amount_out_first = a;
+            amount_out_second = b;
+            profit = b - i;
+        }
+        i += step_size;
+    }
+    (amount_in_first, amount_out_first, amount_out_second, profit)
 }

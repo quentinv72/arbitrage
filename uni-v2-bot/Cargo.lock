@@ -433,7 +433,7 @@ checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 [[package]]
 name = "contracts"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#da4936124188b6ef2832da871f4733de5d2287a6"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#6e51ef5f12600327d984e7a64c5ced724dce8df1"
 dependencies = [
  "convert_case",
  "ethers",
@@ -2292,7 +2292,7 @@ checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 [[package]]
 name = "pools-graph"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#da4936124188b6ef2832da871f4733de5d2287a6"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#6e51ef5f12600327d984e7a64c5ced724dce8df1"
 dependencies = [
  "contracts",
  "dashmap",
@@ -3631,7 +3631,7 @@ checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
 [[package]]
 name = "utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#da4936124188b6ef2832da871f4733de5d2287a6"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#6e51ef5f12600327d984e7a64c5ced724dce8df1"
 dependencies = [
  "either",
  "ethers",
@@ -3794,11 +3794,11 @@ checksum = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
 
 [[package]]
 name = "winapi-util"
-version = "0.1.6"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f29e6f9198ba0d26b4c9f07dbe6f9ed633e1f3d5b8b414090084349e46a52596"
+checksum = "134306a13c5647ad6453e8deaec55d3a44d6021970129e6188735e74bf546697"
 dependencies = [
- "winapi",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
