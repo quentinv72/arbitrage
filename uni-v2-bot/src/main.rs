@@ -1,9 +1,16 @@
+use std::collections::HashSet;
+use std::sync::Arc;
+
+use ethers::abi::Hash;
 use ethers::middleware::Middleware;
+use ethers::prelude::ContractError;
 use ethers::providers::StreamExt;
-use ethers::types::Address;
-use log::{debug, info};
+use ethers::types::{Address, U64};
+use log::{info, warn};
 use pools_graph::pools_graph::PoolsGraph;
 use pools_graph::utils::uniswap_v2;
+use tokio::task::JoinSet;
+use tokio::time::Instant;
 use utils::logging::setup_logging;
 use utils::utils::{Setup, Utils};
 
@@ -28,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let factories = UNISWAP_V2_FACTORIES
         .map(|x| x.parse::<Address>().unwrap())
         .to_vec();
-    let graph = PoolsGraph::new();
+    let graph = Arc::new(PoolsGraph::new());
     uniswap_v2::load_uniswap_v2_pairs(&graph, factories, utils.get_rpc_client()).await?;
     let paths = get_paths_2(&graph, WETH.parse()?);
     info!("Found {} paths", paths.len());
@@ -37,24 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(block) = stream.next().await {
         let block_number = block.number.unwrap();
         info!("Block number: {}", block_number);
-        for path in &paths {
-            let input_address = path.0;
-            let output_address = path.1;
-            uniswap_v2::refresh_reserves(
-                &graph,
-                &input_address,
-                block_number,
-                utils.get_rpc_client(),
-            )
-            .await?;
-            uniswap_v2::refresh_reserves(
-                &graph,
-                &output_address,
-                block_number,
-                utils.get_rpc_client(),
-            )
-            .await?;
-        }
+        update_reserves(block_number, &paths, graph.clone(), utils.get_rpc_client()).await?;
     }
     Ok(())
 }
@@ -83,4 +73,21 @@ fn get_paths_2(pools_graph: &PoolsGraph, start_token: Address) -> Vec<(Address, 
         }
     }
     results
+}
+
+async fn update_reserves<M: Middleware>(
+    current_block: U64,
+    paths: &Vec<(Address, Address)>,
+    pools_graph: Arc<PoolsGraph>,
+    client: Arc<M>,
+) -> Result<(), ContractError<M>> {
+    for path in paths {
+        let input_address = path.0;
+        let output_address = path.1;
+        uniswap_v2::refresh_reserves(&pools_graph, &input_address, current_block, client.clone())
+            .await?;
+        uniswap_v2::refresh_reserves(&pools_graph, &output_address, current_block, client.clone())
+            .await?;
+    }
+    Ok(())
 }
