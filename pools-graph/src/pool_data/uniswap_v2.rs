@@ -1,12 +1,11 @@
-use std::any::Any;
-use std::ops::{Div, Mul};
-use std::sync::Arc;
-
 use contracts::i_uniswap_v_2_pair::IUniswapV2Pair;
 use ethers::middleware::Middleware;
 use ethers::prelude::{ContractError, U256};
 use ethers::types::{Address, U64};
 use log::warn;
+use std::any::Any;
+use std::ops::{Div, Mul};
+use std::sync::Arc;
 
 use crate::pool_data::pool_data::PoolData;
 
@@ -37,6 +36,10 @@ impl UniswapV2 {
             reserve_1,
             block_last_updated,
         }
+    }
+
+    pub fn get_reserves(&self) -> (u128, u128) {
+        (self.reserve_0, self.reserve_1)
     }
 
     pub async fn new_from_client<M: Middleware>(pair_address: Address, client: Arc<M>) -> Result<UniswapV2, ContractError<M>> {
