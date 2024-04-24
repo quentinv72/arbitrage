@@ -8,7 +8,7 @@ use ethers::prelude::{Bytes, ContractError, U256};
 use ethers::types::{Address, U64};
 use log::warn;
 
-use crate::pool_data::pool_data::PoolData;
+use crate::pool_data::pool_data::{PoolData, PoolDataTrait};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct UniswapV2 {
@@ -90,7 +90,7 @@ impl UniswapV2 {
     }
 }
 
-impl PoolData for UniswapV2 {
+impl PoolDataTrait for UniswapV2 {
     fn get_tokens(&self) -> (Address, Address) {
         (self.token_0, self.token_1)
     }

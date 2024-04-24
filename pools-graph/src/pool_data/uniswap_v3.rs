@@ -7,7 +7,7 @@ use ethers::middleware::Middleware;
 use ethers::prelude::U64;
 use ethers::types::{Address, Bytes, U256};
 
-use crate::pool_data::pool_data::PoolData;
+use crate::pool_data::pool_data::PoolDataTrait;
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct UniswapV3 {
@@ -62,7 +62,7 @@ impl UniswapV3 {
     }
 }
 
-impl PoolData for UniswapV3 {
+impl PoolDataTrait for UniswapV3 {
     fn get_tokens(&self) -> (Address, Address) {
         (self.token_0, self.token_1)
     }

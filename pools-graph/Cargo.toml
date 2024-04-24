@@ -14,3 +14,4 @@ contracts = { git = "ssh://git@github.com/quentinv72/arbitrage.git" }
 utils = { git = "ssh://git@github.com/quentinv72/arbitrage.git" }
 serde = { version = "1.0.198", features = ["derive"] }
 reqwest-graphql = "1.0.0"
+enum_dispatch = "0.3.13"

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::pool_data::pool_data::PoolData;
 use ethers::middleware::Middleware;
 use ethers::types::Address;
 use log::{error, info};
@@ -17,7 +18,7 @@ pub struct FactoryV3 {
 }
 
 pub async fn load_uniswap_v3_pools<M: Middleware + 'static>(
-    pools_graph: &PoolsGraph<M>,
+    pools_graph: &PoolsGraph,
     factories: Vec<FactoryV3>,
     client: Arc<M>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -51,7 +52,7 @@ pub async fn load_uniswap_v3_pools<M: Middleware + 'static>(
             }
             for task in tasks {
                 match task.await.unwrap() {
-                    Ok(pool_data) => pools_graph.insert(Box::new(pool_data)),
+                    Ok(pool_data) => pools_graph.insert(PoolData::UniswapV3(pool_data)),
                     Err(e) => error!("Failure to load pool data into map {e}"),
                 }
             }

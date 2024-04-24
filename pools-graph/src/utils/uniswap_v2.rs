@@ -2,6 +2,7 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::pool_data::pool_data::{PoolData, PoolDataTrait};
 use contracts::i_uniswap_v_2_factory::IUniswapV2Factory;
 use dashmap::mapref::one::RefMut;
 use dashmap::try_result::TryResult;
@@ -15,7 +16,7 @@ use crate::pool_data::uniswap_v2::UniswapV2;
 use crate::pools_graph::PoolsGraph;
 
 pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
-    pools_graph: &PoolsGraph<M>,
+    pools_graph: &PoolsGraph,
     factory_addresses: Vec<Address>,
     client: Arc<M>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -40,7 +41,7 @@ pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
         for task in tasks {
             match task.await.unwrap() {
                 Ok(pool_data) => {
-                    pools_graph.insert(Box::new(pool_data));
+                    pools_graph.insert(PoolData::UniswapV2(pool_data));
                     ()
                 }
                 Err(e) => error!("Failed fetch reserve {e}"),
@@ -53,7 +54,7 @@ pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
 }
 
 pub async fn refresh_reserves<M: Middleware>(
-    pools_graph: &PoolsGraph<M>,
+    pools_graph: &PoolsGraph,
     pair_address: &Address,
     current_block: U64,
     client: Arc<M>,

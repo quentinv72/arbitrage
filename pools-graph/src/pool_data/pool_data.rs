@@ -1,14 +1,23 @@
 use std::any::Any;
 use std::fmt::Debug;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::sync::Arc;
 
+use enum_dispatch::enum_dispatch;
 use ethers::providers::Middleware;
 use ethers::types::{Address, Bytes, U256, U64};
 
-// generic trait to have generic method build_swap_calldata
-// this is slightly hacky but who cares...
-pub trait PoolData: Send + Sync {
+use crate::pool_data::uniswap_v2::UniswapV2;
+use crate::pool_data::uniswap_v3::UniswapV3;
+
+#[enum_dispatch(PoolDataTrait)]
+pub enum PoolData {
+    UniswapV2,
+    UniswapV3,
+}
+
+#[enum_dispatch]
+pub trait PoolDataTrait {
     fn get_tokens(&self) -> (Address, Address);
     fn get_pool_address(&self) -> Address;
     fn as_any(&self) -> &dyn Any;
@@ -25,17 +34,3 @@ pub trait PoolData: Send + Sync {
         bundle_executor_address: Address,
     ) -> Bytes;
 }
-
-impl Hash for dyn PoolData {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.get_pool_address().hash(state);
-    }
-}
-
-impl PartialEq for dyn PoolData {
-    fn eq(&self, other: &Self) -> bool {
-        self.get_pool_address() == other.get_pool_address()
-    }
-}
-
-impl Eq for dyn PoolData {}

@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::sync::Arc;
 
+use crate::pool_data::pool_data::PoolDataTrait;
 use contracts::qv_executor::QVExecutor;
 use ethers::abi::{encode, Token};
 use ethers::contract::ContractCall;
@@ -42,9 +43,10 @@ impl Ord for Arbitrage {
 impl Arbitrage {
     fn build_transaction<M: Middleware>(
         &self,
-        pools_graph: &PoolsGraph<M>,
+        pools_graph: &PoolsGraph,
         output_token: Address,
         client: Arc<M>,
+        bundle_executor_address: Address,
     ) -> ContractCall<M, ()> {
         let mut next_call = Self::build_data(
             self.amounts_in.last().unwrap().clone(),
@@ -60,13 +62,12 @@ impl Arbitrage {
                 self.zero_for_ones[i],
                 next_call,
                 Arc::clone(&client),
-                BUNDLE_EXECUTOR_ADDRESS.parse().unwrap(),
+                bundle_executor_address,
             );
             next_call =
                 Self::build_data(self.amounts_in[i - 1].clone(), self.targets[i], swap_data);
         }
-        let bundle_executor_contract =
-            QVExecutor::new(BUNDLE_EXECUTOR_ADDRESS.parse().unwrap(), client);
+        let bundle_executor_contract = QVExecutor::new(bundle_executor_address, client);
         bundle_executor_contract.execute_bundle(
             self.targets[0],
             self.amount_to_coinbase,

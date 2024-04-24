@@ -1,20 +1,20 @@
-use dashmap::{DashMap, DashSet};
 use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::try_result::TryResult;
+use dashmap::{DashMap, DashSet};
 use ethers::prelude::Middleware;
 use ethers::types::Address;
 
-use crate::pool_data::pool_data::PoolData;
+use crate::pool_data::pool_data::{PoolData, PoolDataTrait};
 
-pub struct PoolsGraph<M: Middleware> {
-    _pool_address_to_pool_data: DashMap<Address, Box<dyn PoolData>>,
+pub struct PoolsGraph {
+    _pool_address_to_pool_data: DashMap<Address, PoolData>,
     // ERC-20 token -> Set<ERC-20 token>
     _neighbouring_erc20_tokens: DashMap<Address, DashSet<Address>>,
     // (ERC-20 token, ERC-20 token) -> Pool Address
     _weights: DashMap<(Address, Address), DashSet<Address>>,
 }
 
-impl<M: Middleware> PoolsGraph<M> {
+impl PoolsGraph {
     pub fn new() -> Self {
         Self {
             _pool_address_to_pool_data: DashMap::new(),
@@ -23,14 +23,14 @@ impl<M: Middleware> PoolsGraph<M> {
         }
     }
 
-    pub fn get_pool_data(&self, pool_address: &Address) -> Option<Ref<Address, Box<dyn PoolData>>> {
+    pub fn get_pool_data(&self, pool_address: &Address) -> Option<Ref<Address, PoolData>> {
         self._pool_address_to_pool_data.get(pool_address)
     }
 
     pub fn get_mut_pool_data(
         &self,
         pool_address: &Address,
-    ) -> TryResult<RefMut<Address, Box<dyn PoolData>>> {
+    ) -> TryResult<RefMut<Address, PoolData>> {
         self._pool_address_to_pool_data.try_get_mut(pool_address)
     }
 
@@ -49,7 +49,7 @@ impl<M: Middleware> PoolsGraph<M> {
         self._weights.get(&(token_0, token_1))
     }
 
-    pub(crate) fn insert(&self, pool_data: Box<dyn PoolData>) {
+    pub(crate) fn insert(&self, pool_data: PoolData) {
         let (token_0, token_1) = pool_data.get_tokens();
         let pool_address = pool_data.get_pool_address();
         self._pool_address_to_pool_data
@@ -89,6 +89,7 @@ impl<M: Middleware> PoolsGraph<M> {
 
 #[cfg(test)]
 mod tests {
+    use crate::pool_data::pool_data::PoolDataTrait;
     use ethers::types::U256;
 
     use crate::pool_data::uniswap_v2::UniswapV2;
@@ -114,26 +115,26 @@ mod tests {
         let address_2 = "0x1F98431c8aD98523631AE4a59f267346ea31F784"
             .parse()
             .unwrap();
-        let pd_1 = Box::new(UniswapV3::new(
+        let pd_1 = UniswapV3::new(
             address_1,
             quoter_address.parse().unwrap(),
             U256::from(0),
             token_a,
             token_b,
             1000,
-        ));
+        );
 
-        let pd_2 = Box::new(UniswapV2::new(
+        let pd_2 = UniswapV2::new(
             address_2,
             token_a,
             1999,
             token_c,
             939393,
             ethers::prelude::U64::zero(),
-        ));
+        );
 
-        graph.insert(pd_1);
-        graph.insert(pd_2);
+        graph.insert(pd_1.into());
+        graph.insert(pd_2.into());
 
         assert!(graph
             ._neighbouring_erc20_tokens
