@@ -17,7 +17,7 @@ pub struct FactoryV3 {
 }
 
 pub async fn load_uniswap_v3_pools<M: Middleware + 'static>(
-    pools_graph: &PoolsGraph,
+    pools_graph: &PoolsGraph<M>,
     factories: Vec<FactoryV3>,
     client: Arc<M>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -46,7 +46,7 @@ pub async fn load_uniswap_v3_pools<M: Middleware + 'static>(
                         pool.fee_tier.parse().unwrap(),
                         client_clone,
                     )
-                        .await
+                    .await
                 }))
             }
             for task in tasks {
@@ -108,7 +108,6 @@ async fn get_pools(url: &str, vars: Vars) -> Result<Vec<Pool>, Box<dyn std::erro
         }
     }
 }
-
 
 #[derive(Serialize)]
 struct Vars {

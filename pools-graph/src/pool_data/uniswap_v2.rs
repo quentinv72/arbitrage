@@ -125,26 +125,26 @@ impl PoolData for UniswapV2 {
         Self::get_amount_out(amount_in, U256::from(reserve_in), U256::from(reserve_out))
     }
 
-    // fn build_swap_calldata<M: Middleware>(
-    //     &self,
-    //     _amount_in: U256,
-    //     amount_out: U256,
-    //     zero_for_one: bool,
-    //     data: Bytes,
-    //     client: Arc<M>,
-    //     bundle_executor_address: Address,
-    // ) -> Bytes {
-    //     let uniswap_v2_contract = IUniswapV2Pair::new(self.pair_address, client);
-    //     if zero_for_one {
-    //         uniswap_v2_contract
-    //             .swap(U256::zero(), amount_out, bundle_executor_address, data)
-    //             .calldata()
-    //             .unwrap()
-    //     } else {
-    //         uniswap_v2_contract
-    //             .swap(amount_out, U256::zero(), bundle_executor_address, data)
-    //             .calldata()
-    //             .unwrap()
-    //     }
-    // }
+    fn build_swap_calldata<M: Middleware>(
+        &self,
+        _amount_in: U256,
+        amount_out: U256,
+        zero_for_one: bool,
+        data: Bytes,
+        client: Arc<M>,
+        bundle_executor_address: Address,
+    ) -> Bytes {
+        let uniswap_v2_contract = IUniswapV2Pair::new(self.pair_address, client);
+        if zero_for_one {
+            uniswap_v2_contract
+                .swap(U256::zero(), amount_out, bundle_executor_address, data)
+                .calldata()
+                .unwrap()
+        } else {
+            uniswap_v2_contract
+                .swap(amount_out, U256::zero(), bundle_executor_address, data)
+                .calldata()
+                .unwrap()
+        }
+    }
 }

@@ -42,7 +42,7 @@ impl Ord for Arbitrage {
 impl Arbitrage {
     fn build_transaction<M: Middleware>(
         &self,
-        pools_graph: &PoolsGraph,
+        pools_graph: &PoolsGraph<M>,
         output_token: Address,
         client: Arc<M>,
     ) -> ContractCall<M, ()> {

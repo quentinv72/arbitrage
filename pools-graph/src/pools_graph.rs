@@ -1,11 +1,12 @@
 use dashmap::{DashMap, DashSet};
 use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::try_result::TryResult;
+use ethers::prelude::Middleware;
 use ethers::types::Address;
 
 use crate::pool_data::pool_data::PoolData;
 
-pub struct PoolsGraph {
+pub struct PoolsGraph<M: Middleware> {
     _pool_address_to_pool_data: DashMap<Address, Box<dyn PoolData>>,
     // ERC-20 token -> Set<ERC-20 token>
     _neighbouring_erc20_tokens: DashMap<Address, DashSet<Address>>,
@@ -13,7 +14,7 @@ pub struct PoolsGraph {
     _weights: DashMap<(Address, Address), DashSet<Address>>,
 }
 
-impl PoolsGraph {
+impl<M: Middleware> PoolsGraph<M> {
     pub fn new() -> Self {
         Self {
             _pool_address_to_pool_data: DashMap::new(),
@@ -26,22 +27,33 @@ impl PoolsGraph {
         self._pool_address_to_pool_data.get(pool_address)
     }
 
-    pub fn get_mut_pool_data(&self, pool_address: &Address) -> TryResult<RefMut<Address, Box<dyn PoolData>>> {
+    pub fn get_mut_pool_data(
+        &self,
+        pool_address: &Address,
+    ) -> TryResult<RefMut<Address, Box<dyn PoolData>>> {
         self._pool_address_to_pool_data.try_get_mut(pool_address)
     }
 
-    pub fn get_neighbouring_tokens(&self, token_address: &Address) -> Option<Ref<Address, DashSet<Address>>> {
+    pub fn get_neighbouring_tokens(
+        &self,
+        token_address: &Address,
+    ) -> Option<Ref<Address, DashSet<Address>>> {
         self._neighbouring_erc20_tokens.get(token_address)
     }
 
-    pub fn get_pool_addresses(&self, token_0: Address, token_1: Address) -> Option<Ref<(Address, Address), DashSet<Address>>> {
+    pub fn get_pool_addresses(
+        &self,
+        token_0: Address,
+        token_1: Address,
+    ) -> Option<Ref<(Address, Address), DashSet<Address>>> {
         self._weights.get(&(token_0, token_1))
     }
 
     pub(crate) fn insert(&self, pool_data: Box<dyn PoolData>) {
         let (token_0, token_1) = pool_data.get_tokens();
         let pool_address = pool_data.get_pool_address();
-        self._pool_address_to_pool_data.insert(pool_address, pool_data);
+        self._pool_address_to_pool_data
+            .insert(pool_address, pool_data);
         self.insert_tokens(pool_address, token_0, token_1);
         self.insert_tokens(pool_address, token_1, token_0);
     }
@@ -65,7 +77,8 @@ impl PoolsGraph {
             None => {
                 let neighbour_set = DashSet::new();
                 neighbour_set.insert(token_1);
-                self._neighbouring_erc20_tokens.insert(token_0, neighbour_set);
+                self._neighbouring_erc20_tokens
+                    .insert(token_0, neighbour_set);
                 let weight_set = DashSet::new();
                 weight_set.insert(pool_address);
                 self._weights.insert((token_0, token_1), weight_set);
@@ -73,7 +86,6 @@ impl PoolsGraph {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -85,7 +97,7 @@ mod tests {
 
     #[test]
     fn successfully_inserts_into_graph() {
-        let graph = PoolsGraph::new();
+        let graph: PoolsGraph = PoolsGraph::new();
         let quoter_address = "0x1F98431c8aD98553881AE4a59f267346ea31F784";
         let token_a = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e"
             .parse()
@@ -123,16 +135,37 @@ mod tests {
         graph.insert(pd_1);
         graph.insert(pd_2);
 
-        assert!(graph._neighbouring_erc20_tokens.get(&token_a).unwrap().contains(&token_b));
-        assert!(graph._neighbouring_erc20_tokens.get(&token_a).unwrap().contains(&token_c));
-        assert!(graph._neighbouring_erc20_tokens.get(&token_c).unwrap().contains(&token_a));
-        assert!(graph._neighbouring_erc20_tokens.get(&token_b).unwrap().contains(&token_a));
-        assert!(!graph._neighbouring_erc20_tokens.get(&token_b).unwrap().contains(&token_c));
+        assert!(graph
+            ._neighbouring_erc20_tokens
+            .get(&token_a)
+            .unwrap()
+            .contains(&token_b));
+        assert!(graph
+            ._neighbouring_erc20_tokens
+            .get(&token_a)
+            .unwrap()
+            .contains(&token_c));
+        assert!(graph
+            ._neighbouring_erc20_tokens
+            .get(&token_c)
+            .unwrap()
+            .contains(&token_a));
+        assert!(graph
+            ._neighbouring_erc20_tokens
+            .get(&token_b)
+            .unwrap()
+            .contains(&token_a));
+        assert!(!graph
+            ._neighbouring_erc20_tokens
+            .get(&token_b)
+            .unwrap()
+            .contains(&token_c));
 
         assert!(graph
             ._weights
             .get(&(token_a, token_b))
-            .unwrap().contains(&address_1));
+            .unwrap()
+            .contains(&address_1));
         assert!(graph
             ._weights
             .get(&(token_b, token_a))
@@ -158,7 +191,8 @@ mod tests {
                 ._pool_address_to_pool_data
                 .get(&address_1)
                 .unwrap()
-                .value().get_pool_address(),
+                .value()
+                .get_pool_address(),
             address_1
         );
         assert_eq!(
@@ -166,15 +200,25 @@ mod tests {
                 ._pool_address_to_pool_data
                 .get(&address_2)
                 .unwrap()
-                .value().get_pool_address(),
+                .value()
+                .get_pool_address(),
             address_2
         );
 
         assert!(graph.get_pool_data(&address_1).is_some());
         assert!(graph.get_pool_data(&token_c).is_none());
-        assert!(graph.get_neighbouring_tokens(&token_a).unwrap().contains(&token_c));
-        assert!(graph.get_neighbouring_tokens(&token_c).unwrap().contains(&token_a));
-        assert!(graph.get_pool_addresses(token_a, token_b).unwrap().contains(&address_1));
+        assert!(graph
+            .get_neighbouring_tokens(&token_a)
+            .unwrap()
+            .contains(&token_c));
+        assert!(graph
+            .get_neighbouring_tokens(&token_c)
+            .unwrap()
+            .contains(&token_a));
+        assert!(graph
+            .get_pool_addresses(token_a, token_b)
+            .unwrap()
+            .contains(&address_1));
         assert!(graph.get_pool_addresses(token_a, token_a).is_none());
     }
 }

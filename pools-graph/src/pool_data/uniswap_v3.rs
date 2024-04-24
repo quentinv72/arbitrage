@@ -5,7 +5,7 @@ use contracts::i_uniswap_v_3_pool::IUniswapV3Pool;
 use ethers::contract::ContractError;
 use ethers::middleware::Middleware;
 use ethers::prelude::U64;
-use ethers::types::{Address, U256};
+use ethers::types::{Address, Bytes, U256};
 
 use crate::pool_data::pool_data::PoolData;
 
@@ -86,16 +86,16 @@ impl PoolData for UniswapV3 {
     fn get_amount_out(&self, amount_in: U256, zero_for_one: bool) -> U256 {
         todo!("V3 amount out not implemented")
     }
-    //
-    // fn build_swap_calldata<M: Middleware>(
-    //     &self,
-    //     amount_in: U256,
-    //     amount_out: U256,
-    //     zero_for_one: bool,
-    //     data: Bytes,
-    //     client: Arc<M>,
-    //     bundle_executor_address: Address,
-    // ) -> Bytes {
-    //     todo!("V3 swap calldata not implemented")
-    // }
+
+    fn build_swap_calldata<M: Middleware>(
+        &self,
+        amount_in: U256,
+        amount_out: U256,
+        zero_for_one: bool,
+        data: Bytes,
+        client: Arc<M>,
+        bundle_executor_address: Address,
+    ) -> Bytes {
+        todo!("V3 swap calldata not implemented")
+    }
 }

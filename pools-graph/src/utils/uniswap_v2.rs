@@ -15,7 +15,7 @@ use crate::pool_data::uniswap_v2::UniswapV2;
 use crate::pools_graph::PoolsGraph;
 
 pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
-    pools_graph: &PoolsGraph,
+    pools_graph: &PoolsGraph<M>,
     factory_addresses: Vec<Address>,
     client: Arc<M>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -26,9 +26,9 @@ pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
         let factory_contract = IUniswapV2Factory::new(factory_address, client_clone);
         let number_of_pairs = factory_contract.all_pairs_length().call().await?;
         info!(
-                "factory address {:#032x} has {number_of_pairs} pairs",
-                factory_address
-            );
+            "factory address {:#032x} has {number_of_pairs} pairs",
+            factory_address
+        );
         let mut tasks = Vec::with_capacity(number_of_pairs.as_usize());
         for i in 0..number_of_pairs.as_u32() {
             let client_clone = Arc::clone(&client);
@@ -53,7 +53,7 @@ pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
 }
 
 pub async fn refresh_reserves<M: Middleware>(
-    pools_graph: &PoolsGraph,
+    pools_graph: &PoolsGraph<M>,
     pair_address: &Address,
     current_block: U64,
     client: Arc<M>,
@@ -63,7 +63,7 @@ pub async fn refresh_reserves<M: Middleware>(
             let value = value.as_any_mut();
             match value.downcast_mut::<UniswapV2>() {
                 None => panic!("Refreshing reserves is being called on a non-Uni V2 pool..."),
-                Some(val) => val.maybe_refresh_reserves(current_block, client).await?
+                Some(val) => val.maybe_refresh_reserves(current_block, client).await?,
             }
 
             Ok(())
