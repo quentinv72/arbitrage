@@ -59,6 +59,10 @@ impl Arbitrage {
         }
     }
 
+    pub fn get_estimated_profit(&self) -> U256 {
+        self.estimated_profit
+    }
+
     pub fn build_transaction<M: Middleware>(
         &self,
         pools_graph: &PoolsGraph,
