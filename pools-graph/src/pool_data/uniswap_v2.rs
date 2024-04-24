@@ -99,14 +99,6 @@ impl PoolDataTrait for UniswapV2 {
         self.pair_address
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-
     fn get_last_block_update(&self) -> U64 {
         self.block_last_updated
     }

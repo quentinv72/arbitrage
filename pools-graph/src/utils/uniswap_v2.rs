@@ -61,10 +61,13 @@ pub async fn refresh_reserves<M: Middleware>(
 ) -> Result<(), ContractError<M>> {
     match pools_graph.get_mut_pool_data(pair_address) {
         TryResult::Present(mut value) => {
-            let value = value.as_any_mut();
-            match value.downcast_mut::<UniswapV2>() {
-                None => panic!("Refreshing reserves is being called on a non-Uni V2 pool..."),
-                Some(val) => val.maybe_refresh_reserves(current_block, client).await?,
+            match value.value_mut() {
+                PoolData::UniswapV2(inner) => {
+                    inner.maybe_refresh_reserves(current_block, client).await?
+                }
+                PoolData::UniswapV3(_) => {
+                    panic!("Refreshing reserves is being called on a non-Uni V2 pool...")
+                }
             }
 
             Ok(())
