@@ -65,7 +65,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if max_amount_in > U256::zero() {
                 let (amount_in_first, amount_out_first, amount_out_second, profit) =
                     calculate_profit(&graph, &path.0, &path.1, max_amount_in, zero_for_one);
-                info!("Profit of {profit} wei");
+                if profit > U256::zero() {
+                    info!("Profit of {profit} wei");
+                }
             }
         }
     }
