@@ -13,7 +13,7 @@ use crate::pools_graph::PoolsGraph;
 const BUNDLE_EXECUTOR_ADDRESS: &str = "0x2f5A6dd5bCB5ba085e5f6e2DBF43a0BeA4b6fdfC";
 
 #[derive(Eq, Debug)]
-struct Arbitrage {
+pub struct Arbitrage {
     targets: Vec<Address>,
     amounts_in: Vec<U256>,
     amounts_out: Vec<U256>,

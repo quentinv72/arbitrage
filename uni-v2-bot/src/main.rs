@@ -9,6 +9,7 @@ use ethers::prelude::ContractError;
 use ethers::providers::StreamExt;
 use ethers::types::{Address, U256, U64};
 use log::{error, info, warn};
+use pools_graph::pool_data::pool_data::{PoolData, PoolDataTrait};
 use pools_graph::pool_data::uniswap_v2::UniswapV2;
 use pools_graph::pools_graph::PoolsGraph;
 use pools_graph::utils::uniswap_v2;
@@ -66,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let (amount_in_first, amount_out_first, amount_out_second, profit) =
                     calculate_profit(&graph, &path.0, &path.1, max_amount_in, zero_for_one);
                 if profit > U256::zero() {
-                    info!("Profit of {profit} wei");
+                    Arbitrage::info!("Profit of {profit} wei");
                 }
             }
         }
@@ -125,21 +126,16 @@ fn get_uniswap_v2_pair_reserves(
     pools_graph: &PoolsGraph,
     zero_for_one: bool,
 ) -> (U256, U256) {
-    match pools_graph
-        .get_pool_data(pair_address)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<UniswapV2>()
-    {
-        None => panic!("Should be a uniswap V2 pair"),
-        Some(val) => {
-            let (reserve_0, reserve_1) = val.get_reserves();
+    match pools_graph.get_pool_data(pair_address).unwrap().value() {
+        PoolData::UniswapV2(inner) => {
+            let (reserve_0, reserve_1) = inner.get_reserves();
             if zero_for_one {
                 (U256::from(reserve_0), U256::from(reserve_1))
             } else {
                 (U256::from(reserve_1), U256::from(reserve_0))
             }
         }
+        _other => panic!("Should be a uniswap V2 pair"),
     }
 }
 
