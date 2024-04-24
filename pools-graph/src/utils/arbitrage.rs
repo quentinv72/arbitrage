@@ -41,7 +41,25 @@ impl Ord for Arbitrage {
 }
 
 impl Arbitrage {
-    fn build_transaction<M: Middleware>(
+    pub fn new(
+        targets: Vec<Address>,
+        amounts_in: Vec<U256>,
+        amounts_out: Vec<U256>,
+        zero_for_ones: Vec<bool>,
+        amount_to_coinbase: U256,
+    ) -> Arbitrage {
+        let estimated_profit = amounts_out.last().unwrap() - amounts_in.first().unwrap();
+        Arbitrage {
+            targets,
+            amounts_in,
+            amounts_out,
+            zero_for_ones,
+            amount_to_coinbase,
+            estimated_profit,
+        }
+    }
+
+    pub fn build_transaction<M: Middleware>(
         &self,
         pools_graph: &PoolsGraph,
         output_token: Address,
