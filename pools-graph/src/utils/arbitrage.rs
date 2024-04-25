@@ -91,6 +91,17 @@ impl Arbitrage {
             next_call =
                 Self::build_data(self.amounts_in[i - 1].clone(), self.targets[i], swap_data);
         }
+
+        let start_pool_addr = self.targets[0];
+        let start_pool = pools_graph.get_pool_data(&start_pool_addr).unwrap();
+        next_call = start_pool.build_swap_calldata(
+            self.amounts_in[0],
+            self.amounts_out[0],
+            self.zero_for_ones[0],
+            next_call,
+            Arc::clone(&client),
+            bundle_executor_address,
+        );
         let bundle_executor_contract = QVExecutor::new(bundle_executor_address, client);
         bundle_executor_contract.execute_bundle(
             self.targets[0],
