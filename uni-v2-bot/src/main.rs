@@ -6,8 +6,10 @@ use std::sync::Arc;
 use ethers::abi::Hash;
 use ethers::middleware::Middleware;
 use ethers::prelude::ContractError;
+use ethers::prelude::transaction::eip2718::TypedTransaction;
 use ethers::providers::StreamExt;
 use ethers::types::{Address, U256, U64};
+use ethers::utils::Units::Gwei;
 use log::{debug, error, info, warn};
 use pools_graph::pool_data::pool_data::{PoolData, PoolDataTrait};
 use pools_graph::pool_data::uniswap_v2::UniswapV2;
@@ -67,13 +69,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             None => debug!("No arbitrage found"),
             Some(arb) => {
                 info!("Found a trade {}", arb.get_estimated_profit());
-                let cc = arb.build_transaction(
+                let mut cc = arb.build_transaction(
                     &graph,
                     WETH.parse()?,
                     utils.get_rpc_client(),
                     utils.get_bundle_executor_address(),
                 );
                 let gas_estimate = cc.estimate_gas().await?;
+                // for E2E testing purposes, I will set the max fee per gas to 14 gwei with a
+                // max priority fee of 2 gwei
+                let max_fee = U256::from_dec_str("14000000000").unwrap();
+                let max_priority_fee = U256::from_dec_str("2000000000").unwrap();
+                let tx = match cc.tx {
+                    TypedTransaction::Eip1559(inner) => {
+                        let tx = inner
+                            .gas(gas_estimate.mul(U256::from(11)).div(U256::from(10)))
+                            .max_priority_fee_per_gas(max_priority_fee)
+                            .max_fee_per_gas(max_fee);
+                        utils.get_rpc_client().send_transaction(tx).await?;
+                        info!("THIS IS OUR TX {tx:?}")
+                    }
+                    _other => panic!("Uggh this should be EIP1559"),
+                };
+                return Ok(());
                 info!("The trade would use {gas_estimate} gas units");
             }
         }
