@@ -1,5 +1,5 @@
 use std::cmp::max;
-use std::collections::HashSet;
+use std::collections::{BinaryHeap, HashSet};
 use std::ops::{Div, Mul};
 use std::sync::Arc;
 
@@ -8,11 +8,14 @@ use ethers::middleware::Middleware;
 use ethers::prelude::ContractError;
 use ethers::providers::StreamExt;
 use ethers::types::{Address, U256, U64};
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use pools_graph::pool_data::pool_data::{PoolData, PoolDataTrait};
 use pools_graph::pool_data::uniswap_v2::UniswapV2;
 use pools_graph::pools_graph::PoolsGraph;
+use pools_graph::utils::arbitrage::Arbitrage;
 use pools_graph::utils::uniswap_v2;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use utils::logging::setup_logging;
@@ -50,32 +53,71 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(block) = stream.next().await {
         let block_number = block.number.unwrap();
         info!("Block number: {}", block_number);
+        let start = Instant::now();
         update_reserves(block_number, &paths, graph.clone(), utils.get_rpc_client()).await?;
-        for path in &paths {
-            let zero_for_one = path.0 == WETH.parse()?;
-            let (input_reserve_in, input_reserve_out) =
-                get_uniswap_v2_pair_reserves(&path.0, &graph, zero_for_one);
-            let (output_reserve_in, output_reserve_out) =
-                get_uniswap_v2_pair_reserves(&path.1, &graph, zero_for_one);
-            let max_amount_in = max_amount_in(
-                input_reserve_in,
-                input_reserve_out,
-                output_reserve_in,
-                output_reserve_out,
-            );
-            if max_amount_in > U256::zero() {
-                let (amount_in_first, amount_out_first, amount_out_second, profit) =
-                    calculate_profit(&graph, &path.0, &path.1, max_amount_in, zero_for_one);
-                if profit > U256::zero() {
-                    Arbitrage::info!("Profit of {profit} wei");
-                }
+        let profitable_trades = paths
+            .par_iter()
+            .map(|x| try_finding_arbitrage(&graph, x.0, x.1))
+            .filter(|x| x.is_some())
+            .map(|x| x.unwrap())
+            .collect::<Vec<_>>();
+        let elapsed = start.elapsed();
+        info!("It took {elapsed:.2?} to compute potential trades");
+        match profitable_trades.iter().max() {
+            None => debug!("No arbitrage found"),
+            Some(arb) => {
+                info!("Found a trade {}", arb.get_estimated_profit());
+                let cc = arb.build_transaction(
+                    &graph,
+                    WETH.parse()?,
+                    utils.get_rpc_client(),
+                    utils.get_bundle_executor_address(),
+                );
+                let gas_estimate = cc.estimate_gas().await?;
+                info!("The trade would use {gas_estimate} gas units");
             }
         }
     }
 
-    let client = utils.get_rpc_client();
-
     Ok(())
+}
+
+fn try_finding_arbitrage(
+    graph: &PoolsGraph,
+    input_address: Address,
+    output_address: Address,
+) -> Option<Arbitrage> {
+    let (input_token_0, _) = graph.get_pool_data(&input_address).unwrap().get_tokens();
+    let zero_for_one = input_token_0 == WETH.parse().unwrap();
+    let (input_reserve_in, input_reserve_out) =
+        get_uniswap_v2_pair_reserves(&input_address, &graph, zero_for_one);
+    let (output_reserve_in, output_reserve_out) =
+        get_uniswap_v2_pair_reserves(&output_address, &graph, zero_for_one);
+    let max_amount_in = max_amount_in(
+        input_reserve_in,
+        input_reserve_out,
+        output_reserve_in,
+        output_reserve_out,
+    );
+    if max_amount_in > U256::zero() {
+        let (amount_in_first, amount_out_first, amount_out_second, profit) = calculate_profit(
+            &graph,
+            &input_address,
+            &output_address,
+            max_amount_in,
+            zero_for_one,
+        );
+        if profit > U256::zero() {
+            return Some(Arbitrage::new(
+                vec![input_address, output_address],
+                vec![amount_in_first, amount_out_first],
+                vec![amount_out_first, amount_out_second],
+                vec![zero_for_one, !zero_for_one],
+                U256::zero(),
+            ));
+        }
+    }
+    None
 }
 
 // Finds all paths of size 2 starting with a given token and outputting the same token
