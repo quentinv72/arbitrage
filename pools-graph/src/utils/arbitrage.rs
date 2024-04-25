@@ -77,7 +77,6 @@ impl Arbitrage {
             Bytes::from(Vec::new()),
         );
         for i in (1..self.targets.len()).rev() {
-            debug!("{}", next_call);
             let pool_address = self.targets[i];
             let pool = pools_graph.get_pool_data(&pool_address).unwrap();
             let swap_data = pool.build_swap_calldata(
