@@ -12,9 +12,14 @@ use url::Url;
 
 use crate::utils::Env::{Production, Staging};
 
-type FlashbotsProvider =
+pub type FlashbotsProvider =
     SignerMiddleware<BroadcasterMiddleware<Provider<Http>, Wallet<SigningKey>>, Wallet<SigningKey>>;
-static BUILDER_URLS: &[&str] = &[];
+static BUILDER_URLS: &[&str] = &[
+    "https://rpc.beaverbuild.org",
+    "https://relay.flashbots.net",
+    "https://rsync-builder.xyz",
+    "https://rpc.titanbuilder.xyz",
+];
 
 pub struct Utils<M: Middleware> {
     ws_client: Arc<Provider<Ws>>,
