@@ -5,11 +5,13 @@ use std::sync::Arc;
 
 use ethers::abi::Hash;
 use ethers::middleware::Middleware;
-use ethers::prelude::ContractError;
 use ethers::prelude::transaction::eip2718::TypedTransaction;
+use ethers::prelude::{ContractError, SignerMiddleware};
 use ethers::providers::StreamExt;
+use ethers::signers::Signer;
 use ethers::types::{Address, U256, U64};
 use ethers::utils::Units::Gwei;
+use ethers_flashbots::{BroadcasterMiddleware, BundleRequest, PendingBundleError};
 use log::{debug, error, info, warn};
 use pools_graph::pool_data::pool_data::{PoolData, PoolDataTrait};
 use pools_graph::pool_data::uniswap_v2::UniswapV2;
@@ -21,7 +23,7 @@ use rayon::iter::ParallelIterator;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use utils::logging::setup_logging;
-use utils::utils::{Setup, Utils};
+use utils::utils::{FlashbotsProvider, Setup, Utils};
 
 const UNISWAP_V2_FACTORIES: [&str; 5] = [
     // "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
@@ -82,16 +84,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let max_priority_fee = U256::from_dec_str("2000000000").unwrap();
                 let tx = match cc.tx {
                     TypedTransaction::Eip1559(inner) => {
-                        let tx = inner
+                        let client: Arc<FlashbotsProvider> = utils.get_rpc_client();
+                        let tx: TypedTransaction = inner
                             .gas(gas_estimate.mul(U256::from(11)).div(U256::from(10)))
                             .max_priority_fee_per_gas(max_priority_fee)
-                            .max_fee_per_gas(max_fee);
-                        utils.get_rpc_client().send_transaction(tx).await?;
-                        info!("THIS IS OUR TX {tx:?}")
+                            .max_fee_per_gas(max_fee)
+                            .chain_id(1)
+                            .into();
+                        // let pending_tx = client.send_transaction(tx, None).await?;
+                        // let receipt = pending_tx
+                        //     .await?
+                        //     .ok_or_else(|| eyre::format_err!("tx dropped from mempool"))?;
+                        // let tx = client.get_transaction(receipt.transaction_hash).await?;
+                        //
+                        // println!("Sent tx: {}\n", serde_json::to_string(&tx)?);
+                        // println!("Tx receipt: {}", serde_json::to_string(&receipt)?);
+                        // return Ok(());
+                        return Ok(());
                     }
+                    //
+                    //     let signature = client.signer().sign_transaction(&tx).await?;
+                    //     let bundle_request = BundleRequest::new()
+                    //         .push_transaction(tx.rlp_signed(&signature))
+                    //         .set_block(block_number + 1)
+                    //         .set_simulation_block(block_number)
+                    //         .set_simulation_timestamp(0);
+                    //     let broadcast_client: &BroadcasterMiddleware<_, _> = client.inner();
+                    //     let results = broadcast_client.send_bundle(&bundle_request).await?;
+                    //     // You can also optionally wait to see if the bundle was included
+                    //     for result in results {
+                    //         match result {
+                    //             Ok(pending_bundle) => match pending_bundle.await {
+                    //                 Ok(bundle_hash) => {
+                    //                     println!(
+                    //                         "Bundle with hash {:?} was included in target block",
+                    //                         bundle_hash
+                    //                     );
+                    //                     return Ok(());
+                    //                 }
+                    //                 Err(PendingBundleError::BundleNotIncluded) => {
+                    //                     println!("Bundle was not included in target block.")
+                    //                 }
+                    //                 Err(e) => println!("An error occured: {}", e),
+                    //             },
+                    //             Err(e) => println!("An error occured: {}", e),
+                    //         }
+                    //     }
+                    // }
                     _other => panic!("Uggh this should be EIP1559"),
                 };
-                return Ok(());
+                // return Ok(());
                 info!("The trade would use {gas_estimate} gas units");
             }
         }

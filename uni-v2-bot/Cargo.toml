@@ -13,3 +13,6 @@ pools-graph = { git = "ssh://git@github.com/quentinv72/arbitrage.git" }
 utils = { git = "ssh://git@github.com/quentinv72/arbitrage.git" }
 tokio = { version = "1.37.0", features = ["rt", "rt-multi-thread", "macros"] }
 rayon = "1.10.0"
+ethers-flashbots = "0.15.0"
+serde_json = "1.0.116"
+eyre = "0.6.12"
