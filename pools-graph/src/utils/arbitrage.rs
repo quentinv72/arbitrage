@@ -64,6 +64,10 @@ impl Arbitrage {
         self.estimated_profit
     }
 
+    pub fn get_pair_addresses(&self) -> &Vec<Address> {
+        &self.targets
+    }
+
     pub fn build_transaction<M: Middleware>(
         &self,
         pools_graph: &PoolsGraph,
