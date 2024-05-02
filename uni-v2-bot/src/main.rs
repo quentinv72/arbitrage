@@ -3,10 +3,13 @@ use std::collections::{BinaryHeap, HashSet};
 use std::ops::{Div, Mul};
 use std::sync::Arc;
 
+use contracts::qv_executor::QVExecutorErrors;
 use ethers::abi::Hash;
+use ethers::contract::EthError;
+use ethers::core::k256::elliptic_curve::consts::U2;
 use ethers::middleware::Middleware;
-use ethers::prelude::transaction::eip2718::TypedTransaction;
 use ethers::prelude::{ContractError, SignerMiddleware};
+use ethers::prelude::transaction::eip2718::TypedTransaction;
 use ethers::providers::StreamExt;
 use ethers::signers::Signer;
 use ethers::types::{Address, U256, U64};
@@ -37,104 +40,107 @@ const UNISWAP_V2_FACTORIES: [&str; 5] = [
 const WETH: &str = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 
 // There is probably some env variable that I can use here...
-const APP_NAME: &str = "uni_v2_bot";
+const APP_NAME: &str = env!("CARGO_CRATE_NAME");
 
-const STEP_SIZE: u32 = 10000;
+const STEP_SIZE: u32 = 20000;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let utils = Utils::setup().await;
     setup_logging(utils.is_production(), APP_NAME);
+    let rpc_client = utils.get_rpc_client();
     let factories = UNISWAP_V2_FACTORIES
         .map(|x| x.parse::<Address>().unwrap())
         .to_vec();
     let graph = Arc::new(PoolsGraph::new());
-    uniswap_v2::load_uniswap_v2_pairs(&graph, factories, utils.get_rpc_client()).await?;
+    uniswap_v2::load_uniswap_v2_pairs(&graph, factories, Arc::clone(&rpc_client)).await?;
     let paths = get_paths_2(&graph, WETH.parse()?);
     info!("Found {} paths", paths.len());
+    // Set of blacklisted addresses because of failures to trade on token
+    let mut blacklist: HashSet<Address> = HashSet::new();
     let ws_client = utils.get_ws_client();
     let mut stream = ws_client.subscribe_blocks().await?;
     while let Some(block) = stream.next().await {
         let block_number = block.number.unwrap();
         info!("Block number: {}", block_number);
-        let start = Instant::now();
-        update_reserves(block_number, &paths, graph.clone(), utils.get_rpc_client()).await?;
+        let gas_price = rpc_client.get_gas_price().await?;
+        update_reserves(block_number, &paths, graph.clone(), Arc::clone(&rpc_client)).await?;
         let profitable_trades = paths
             .par_iter()
+            .filter(|x| !blacklist.contains(&x.0) && !blacklist.contains(&x.1))
             .map(|x| try_finding_arbitrage(&graph, x.0, x.1))
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
-        let elapsed = start.elapsed();
-        info!("It took {elapsed:.2?} to compute potential trades");
         match profitable_trades.iter().max() {
             None => debug!("No arbitrage found"),
             Some(arb) => {
-                info!("Found a trade {}", arb.get_estimated_profit());
                 let mut cc = arb.build_transaction(
                     &graph,
                     WETH.parse()?,
-                    utils.get_rpc_client(),
+                    Arc::clone(&rpc_client),
                     utils.get_bundle_executor_address(),
                 );
-                let gas_estimate = cc.estimate_gas().await?;
-                // for E2E testing purposes, I will set the max fee per gas to 14 gwei with a
-                // max priority fee of 2 gwei
-                let max_fee = U256::from_dec_str("14000000000").unwrap();
-                let max_priority_fee = U256::from_dec_str("2000000000").unwrap();
-                let tx = match cc.tx {
-                    TypedTransaction::Eip1559(inner) => {
-                        let client: Arc<FlashbotsProvider> = utils.get_rpc_client();
-                        let tx: TypedTransaction = inner
-                            .gas(gas_estimate.mul(U256::from(11)).div(U256::from(10)))
-                            .max_priority_fee_per_gas(max_priority_fee)
-                            .max_fee_per_gas(max_fee)
-                            .chain_id(1)
-                            .into();
-                        // let pending_tx = client.send_transaction(tx, None).await?;
-                        // let receipt = pending_tx
-                        //     .await?
-                        //     .ok_or_else(|| eyre::format_err!("tx dropped from mempool"))?;
-                        // let tx = client.get_transaction(receipt.transaction_hash).await?;
-                        //
-                        // println!("Sent tx: {}\n", serde_json::to_string(&tx)?);
-                        // println!("Tx receipt: {}", serde_json::to_string(&receipt)?);
-                        // return Ok(());
-                        return Ok(());
+
+                let gas_estimate_opt = match cc.estimate_gas().await {
+                    Ok(est) => Some(est),
+                    Err(e) => {
+                        if e.is_revert() {
+                            let eth_err: QVExecutorErrors = e.decode_contract_revert().unwrap();
+                            arb.get_pair_addresses().iter().for_each(|x| {
+                                blacklist.insert(x.clone());
+                                ()
+                            });
+                            warn!(
+                                "Bad arbitrage... Gas estimate reverted. Blacklisting pairs {:#?} \n\
+                            Revert data --- {eth_err}",
+                                arb.get_pair_addresses()
+                            );
+                        }
+                        None
                     }
-                    //
-                    //     let signature = client.signer().sign_transaction(&tx).await?;
-                    //     let bundle_request = BundleRequest::new()
-                    //         .push_transaction(tx.rlp_signed(&signature))
-                    //         .set_block(block_number + 1)
-                    //         .set_simulation_block(block_number)
-                    //         .set_simulation_timestamp(0);
-                    //     let broadcast_client: &BroadcasterMiddleware<_, _> = client.inner();
-                    //     let results = broadcast_client.send_bundle(&bundle_request).await?;
-                    //     // You can also optionally wait to see if the bundle was included
-                    //     for result in results {
-                    //         match result {
-                    //             Ok(pending_bundle) => match pending_bundle.await {
-                    //                 Ok(bundle_hash) => {
-                    //                     println!(
-                    //                         "Bundle with hash {:?} was included in target block",
-                    //                         bundle_hash
-                    //                     );
-                    //                     return Ok(());
-                    //                 }
-                    //                 Err(PendingBundleError::BundleNotIncluded) => {
-                    //                     println!("Bundle was not included in target block.")
-                    //                 }
-                    //                 Err(e) => println!("An error occured: {}", e),
-                    //             },
-                    //             Err(e) => println!("An error occured: {}", e),
-                    //         }
-                    //     }
-                    // }
-                    _other => panic!("Uggh this should be EIP1559"),
                 };
-                // return Ok(());
-                info!("The trade would use {gas_estimate} gas units");
+                if gas_estimate_opt.is_none() {
+                    continue;
+                }
+                let gas_estimate = gas_estimate_opt.unwrap();
+
+                if gas_estimate.mul(gas_price) < arb.get_estimated_profit() {
+                    info!(
+                        "Found a trade with estimated profit of {}",
+                        arb.get_estimated_profit()
+                    );
+                    let remaining_profit = arb.get_estimated_profit() - gas_estimate.mul(gas_price);
+                    // 50 % of estimated profits
+                    let max_priority_fee_per_gas = (remaining_profit.div(gas_estimate))
+                        .mul(U256::from(50))
+                        .div(U256::from(100));
+                    let max_fee = gas_price + max_priority_fee_per_gas;
+                    info!(
+                        "Found a trade with estimated profit of {}",
+                        arb.get_estimated_profit()
+                    );
+                    match cc.tx {
+                        TypedTransaction::Eip1559(inner) => {
+                            let tx: TypedTransaction = inner
+                                .gas(gas_estimate.mul(U256::from(11)).div(U256::from(10)))
+                                .max_priority_fee_per_gas(max_priority_fee_per_gas)
+                                .max_fee_per_gas(max_fee)
+                                .chain_id(1)
+                                .into();
+                            let pending_tx = rpc_client.send_transaction(tx, None).await?;
+                            let receipt = pending_tx
+                                .await?
+                                .ok_or_else(|| eyre::format_err!("tx dropped from mempool"))?;
+                            let tx = rpc_client.get_transaction(receipt.transaction_hash).await?;
+
+                            info!("Sent tx: {}\n", serde_json::to_string(&tx)?);
+                            info!("Tx receipt: {}", serde_json::to_string(&receipt)?);
+                            return Ok(());
+                        }
+                        _other => panic!("Uggh this should be EIP1559"),
+                    };
+                };
             }
         }
     }
