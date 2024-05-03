@@ -1,5 +1,6 @@
 use std::cmp::max;
 use std::collections::{BinaryHeap, HashSet};
+use std::error::Error;
 use std::ops::{Div, Mul};
 use std::sync::Arc;
 
@@ -44,7 +45,7 @@ const APP_NAME: &str = env!("CARGO_CRATE_NAME");
 
 const NUMBER_OF_STEPS: u32 = 1000;
 
-const PRIORITY_FEE_PERCENTAGE: u32 = 60;
+const PRIORITY_FEE_PERCENTAGE: u32 = 80;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -122,15 +123,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let gas_estimate = gas_estimate_opt.unwrap();
 
             if gas_estimate.mul(next_base_fee) < top_item.get_estimated_profit() {
-                try_submit_trade(
+                match try_submit_trade(
                     &top_item,
                     cc.tx,
                     gas_estimate,
                     next_base_fee,
                     Arc::clone(&rpc_client),
                 )
-                .await?;
-                break;
+                .await
+                {
+                    Ok(_) => break,
+                    Err(e) => {
+                        error!("Failed to submit trade... see error {e}");
+                        // need to break because waited until next block to check success
+                        break;
+                    }
+                };
             };
         }
     }
@@ -320,11 +328,11 @@ async fn try_submit_trade<M: Middleware + 'static>(
                 .chain_id(1)
                 .into();
             let pending_tx = rpc_client.send_transaction(tx, None).await?;
+            info!("Sending tx: {tx:#?}\n");
             let receipt = pending_tx
                 .await?
                 .ok_or_else(|| eyre::format_err!("tx dropped from mempool"))?;
             let tx = rpc_client.get_transaction(receipt.transaction_hash).await?;
-
             info!("Sent tx: {}\n", serde_json::to_string(&tx)?);
             info!("Tx receipt: {}", serde_json::to_string(&receipt)?);
             return Ok(());
