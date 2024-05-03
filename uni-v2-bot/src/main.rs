@@ -327,8 +327,8 @@ async fn try_submit_trade<M: Middleware + 'static>(
                 .max_fee_per_gas(max_fee)
                 .chain_id(1)
                 .into();
+            info!("Sending tx: {:#?}\n", tx);
             let pending_tx = rpc_client.send_transaction(tx, None).await?;
-            info!("Sending tx: {tx:#?}\n");
             let receipt = pending_tx
                 .await?
                 .ok_or_else(|| eyre::format_err!("tx dropped from mempool"))?;
