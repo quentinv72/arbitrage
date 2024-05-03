@@ -28,9 +28,8 @@ use tokio::time::Instant;
 use utils::logging::setup_logging;
 use utils::utils::{FlashbotsProvider, Setup, Utils};
 
-const UNISWAP_V2_FACTORIES: [&str; 5] = [
-    // Uniswap factory has a lot of pairs... Might want to split it up into multiple bots
-    // "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
+const UNISWAP_V2_FACTORIES: [&str; 6] = [
+    "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
     "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac",
     "0x0388c1e0f210abae597b7de712b9510c6c36c857",
     "0x9DEB29c9a4c7A88a3C0257393b7f3335338D9A9D",
@@ -43,9 +42,9 @@ const WETH: &str = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 // There is probably some env variable that I can use here...
 const APP_NAME: &str = env!("CARGO_CRATE_NAME");
 
-const NUMBER_OF_STEPS: u32 = 30000;
+const NUMBER_OF_STEPS: u32 = 1000;
 
-const PRIORITY_FEE_PERCENTAGE: u32 = 50;
+const PRIORITY_FEE_PERCENTAGE: u32 = 60;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -68,8 +67,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if block_number != rpc_client.get_block_number().await? {
             continue;
         }
-        info!("Block number: {}", block_number);
-        let gas_price = rpc_client.get_gas_price().await?;
+        let next_base_fee = block.next_block_base_fee().unwrap();
+        info!("Block number: {block_number} with base fee {next_base_fee}");
         update_reserves(block_number, &paths, graph.clone(), Arc::clone(&rpc_client)).await?;
         let mut profitable_trades = paths
             .par_iter()
@@ -122,12 +121,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             let gas_estimate = gas_estimate_opt.unwrap();
 
-            if gas_estimate.mul(gas_price) < top_item.get_estimated_profit() {
+            if gas_estimate.mul(next_base_fee) < top_item.get_estimated_profit() {
                 try_submit_trade(
                     &top_item,
                     cc.tx,
                     gas_estimate,
-                    gas_price,
+                    next_base_fee,
                     Arc::clone(&rpc_client),
                 )
                 .await?;
@@ -295,19 +294,19 @@ async fn try_submit_trade<M: Middleware + 'static>(
     arb: &Arbitrage,
     tx: TypedTransaction,
     gas_estimate: U256,
-    gas_price: U256,
+    base_fee: U256,
     rpc_client: Arc<M>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     info!(
         "Found a trade with estimated profit of {}",
         arb.get_estimated_profit()
     );
-    let remaining_profit = arb.get_estimated_profit() - gas_estimate.mul(gas_price);
+    let remaining_profit = arb.get_estimated_profit() - gas_estimate.mul(base_fee);
     // 50 % of estimated profits
     let max_priority_fee_per_gas = (remaining_profit.div(gas_estimate))
         .mul(U256::from(PRIORITY_FEE_PERCENTAGE))
         .div(U256::from(100));
-    let max_fee = gas_price + max_priority_fee_per_gas;
+    let max_fee = base_fee + max_priority_fee_per_gas;
     info!(
         "Found a trade with estimated profit of {}",
         arb.get_estimated_profit()

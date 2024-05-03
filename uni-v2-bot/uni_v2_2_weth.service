@@ -5,7 +5,7 @@ Description="Uniswap V2 arbitrage bot 2 WETH"
 User=bot
 Group=bot
 Type=simple
-ExecStart=/home/quentin/workspace/arbitrage/uni-v2-bot/target/release/uni-v2-bot
+ExecStart=/usr/bin/uni-v2-bot
 EnvironmentFile=/uni-v2-bot.env
 
 [Install]
