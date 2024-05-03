@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use contracts::qv_executor::QVExecutorErrors;
 use ethers::abi::Hash;
-use ethers::contract::EthError;
+use ethers::contract::{ContractCall, EthError};
 use ethers::core::k256::elliptic_curve::consts::U2;
 use ethers::middleware::Middleware;
 use ethers::prelude::{ContractError, SignerMiddleware};
@@ -29,6 +29,7 @@ use utils::logging::setup_logging;
 use utils::utils::{FlashbotsProvider, Setup, Utils};
 
 const UNISWAP_V2_FACTORIES: [&str; 5] = [
+    // Uniswap factory has a lot of pairs... Might want to split it up into multiple bots
     // "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
     "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac",
     "0x0388c1e0f210abae597b7de712b9510c6c36c857",
@@ -42,7 +43,9 @@ const WETH: &str = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 // There is probably some env variable that I can use here...
 const APP_NAME: &str = env!("CARGO_CRATE_NAME");
 
-const STEP_SIZE: u32 = 20000;
+const STEP_SIZE: u32 = 1000;
+
+const PRIORITY_FEE_PERCENTAGE: u32 = 50;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -62,86 +65,74 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut stream = ws_client.subscribe_blocks().await?;
     while let Some(block) = stream.next().await {
         let block_number = block.number.unwrap();
+        if block_number != rpc_client.get_block_number().await? {
+            continue;
+        }
         info!("Block number: {}", block_number);
         let gas_price = rpc_client.get_gas_price().await?;
         update_reserves(block_number, &paths, graph.clone(), Arc::clone(&rpc_client)).await?;
-        let profitable_trades = paths
+        let mut profitable_trades = paths
             .par_iter()
             .filter(|x| !blacklist.contains(&x.0) && !blacklist.contains(&x.1))
             .map(|x| try_finding_arbitrage(&graph, x.0, x.1))
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
-        match profitable_trades.iter().max() {
-            None => debug!("No arbitrage found"),
-            Some(arb) => {
-                let mut cc = arb.build_transaction(
-                    &graph,
-                    WETH.parse()?,
-                    Arc::clone(&rpc_client),
-                    utils.get_bundle_executor_address(),
-                );
 
-                let gas_estimate_opt = match cc.estimate_gas().await {
-                    Ok(est) => Some(est),
-                    Err(e) => {
-                        if e.is_revert() {
-                            let eth_err: QVExecutorErrors = e.decode_contract_revert().unwrap();
-                            arb.get_pair_addresses().iter().for_each(|x| {
-                                blacklist.insert(x.clone());
-                                ()
-                            });
-                            warn!(
-                                "Bad arbitrage... Gas estimate reverted. Blacklisting pairs {:#?} \n\
-                            Revert data --- {eth_err}",
-                                arb.get_pair_addresses()
-                            );
+        profitable_trades.sort();
+        while profitable_trades.len() > 0 {
+            let top_item = profitable_trades.pop().unwrap();
+            let mut cc = top_item.build_transaction(
+                &graph,
+                WETH.parse()?,
+                Arc::clone(&rpc_client),
+                utils.get_bundle_executor_address(),
+            );
+
+            let gas_estimate_opt = match cc.estimate_gas().await {
+                Ok(est) => {
+                    top_item.get_pair_addresses().iter().for_each(|x| {
+                        if blacklist.contains(x) {
+                            info!("Removing {x} from blacklist");
+                            blacklist.remove(x);
                         }
-                        None
-                    }
-                };
-                if gas_estimate_opt.is_none() {
-                    continue;
+                    });
+                    Some(est)
                 }
-                let gas_estimate = gas_estimate_opt.unwrap();
-
-                if gas_estimate.mul(gas_price) < arb.get_estimated_profit() {
-                    info!(
-                        "Found a trade with estimated profit of {}",
-                        arb.get_estimated_profit()
-                    );
-                    let remaining_profit = arb.get_estimated_profit() - gas_estimate.mul(gas_price);
-                    // 50 % of estimated profits
-                    let max_priority_fee_per_gas = (remaining_profit.div(gas_estimate))
-                        .mul(U256::from(50))
-                        .div(U256::from(100));
-                    let max_fee = gas_price + max_priority_fee_per_gas;
-                    info!(
-                        "Found a trade with estimated profit of {}",
-                        arb.get_estimated_profit()
-                    );
-                    match cc.tx {
-                        TypedTransaction::Eip1559(inner) => {
-                            let tx: TypedTransaction = inner
-                                .gas(gas_estimate.mul(U256::from(11)).div(U256::from(10)))
-                                .max_priority_fee_per_gas(max_priority_fee_per_gas)
-                                .max_fee_per_gas(max_fee)
-                                .chain_id(1)
-                                .into();
-                            let pending_tx = rpc_client.send_transaction(tx, None).await?;
-                            let receipt = pending_tx
-                                .await?
-                                .ok_or_else(|| eyre::format_err!("tx dropped from mempool"))?;
-                            let tx = rpc_client.get_transaction(receipt.transaction_hash).await?;
-
-                            info!("Sent tx: {}\n", serde_json::to_string(&tx)?);
-                            info!("Tx receipt: {}", serde_json::to_string(&receipt)?);
-                            return Ok(());
-                        }
-                        _other => panic!("Uggh this should be EIP1559"),
-                    };
-                };
+                Err(e) => {
+                    if e.is_revert() {
+                        let eth_err: QVExecutorErrors = e.decode_contract_revert().unwrap();
+                        top_item.get_pair_addresses().iter().for_each(|x| {
+                            blacklist.insert(x.clone());
+                            ()
+                        });
+                        warn!(
+                            "Bad arbitrage... Gas estimate reverted. Blacklisting pairs {:#?} \n\
+                            Revert data --- {eth_err}",
+                            top_item.get_pair_addresses()
+                        );
+                    } else {
+                        panic!("Got a strange error {e}")
+                    }
+                    None
+                }
+            };
+            if gas_estimate_opt.is_none() {
+                continue;
             }
+            let gas_estimate = gas_estimate_opt.unwrap();
+
+            if gas_estimate.mul(gas_price) < top_item.get_estimated_profit() {
+                try_submit_trade(
+                    &top_item,
+                    cc.tx,
+                    gas_estimate,
+                    gas_price,
+                    Arc::clone(&rpc_client),
+                )
+                .await?;
+                break;
+            };
         }
     }
 
@@ -247,19 +238,6 @@ fn get_uniswap_v2_pair_reserves(
     }
 }
 
-fn has_arbitrage(
-    input_reserve_in: U256,
-    input_reserve_out: U256,
-    output_reserve_in: U256,
-    output_reserve_out: U256,
-) -> bool {
-    let upper_bound = U256::from(994009)
-        .mul(input_reserve_out)
-        .mul(output_reserve_out)
-        .div(U256::from(1000000).mul(input_reserve_in));
-    output_reserve_in < upper_bound
-}
-
 fn max_amount_in(
     input_reserve_in: U256,
     input_reserve_out: U256,
@@ -272,11 +250,14 @@ fn max_amount_in(
     let b = U256::from(1_000_000)
         .mul(input_reserve_in)
         .mul(output_reserve_in);
-    if a < b {
+    let c = U256::from(997).mul(input_reserve_out) + U256::from(1_000).mul(output_reserve_in);
+
+    if a < b || c.is_zero() {
         return U256::zero();
     }
+
     let numerator = a - b;
-    let c = U256::from(997).mul(input_reserve_out) + U256::from(1_000).mul(output_reserve_in);
+
     let denominator = U256::from(997).mul(c);
     numerator.div(denominator)
 }
@@ -308,4 +289,47 @@ fn calculate_profit(
         i += step_size;
     }
     (amount_in_first, amount_out_first, amount_out_second, profit)
+}
+
+async fn try_submit_trade<M: Middleware + 'static>(
+    arb: &Arbitrage,
+    tx: TypedTransaction,
+    gas_estimate: U256,
+    gas_price: U256,
+    rpc_client: Arc<M>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    info!(
+        "Found a trade with estimated profit of {}",
+        arb.get_estimated_profit()
+    );
+    let remaining_profit = arb.get_estimated_profit() - gas_estimate.mul(gas_price);
+    // 50 % of estimated profits
+    let max_priority_fee_per_gas = (remaining_profit.div(gas_estimate))
+        .mul(U256::from(PRIORITY_FEE_PERCENTAGE))
+        .div(U256::from(100));
+    let max_fee = gas_price + max_priority_fee_per_gas;
+    info!(
+        "Found a trade with estimated profit of {}",
+        arb.get_estimated_profit()
+    );
+    match tx {
+        TypedTransaction::Eip1559(inner) => {
+            let tx: TypedTransaction = inner
+                .gas(gas_estimate)
+                .max_priority_fee_per_gas(max_priority_fee_per_gas)
+                .max_fee_per_gas(max_fee)
+                .chain_id(1)
+                .into();
+            let pending_tx = rpc_client.send_transaction(tx, None).await?;
+            let receipt = pending_tx
+                .await?
+                .ok_or_else(|| eyre::format_err!("tx dropped from mempool"))?;
+            let tx = rpc_client.get_transaction(receipt.transaction_hash).await?;
+
+            info!("Sent tx: {}\n", serde_json::to_string(&tx)?);
+            info!("Tx receipt: {}", serde_json::to_string(&receipt)?);
+            return Ok(());
+        }
+        _other => panic!("Uggh this should be EIP1559"),
+    };
 }
