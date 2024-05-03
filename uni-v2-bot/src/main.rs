@@ -43,7 +43,7 @@ const WETH: &str = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 // There is probably some env variable that I can use here...
 const APP_NAME: &str = env!("CARGO_CRATE_NAME");
 
-const STEP_SIZE: u32 = 1000;
+const NUMBER_OF_STEPS: u32 = 30000;
 
 const PRIORITY_FEE_PERCENTAGE: u32 = 50;
 
@@ -149,7 +149,7 @@ fn try_finding_arbitrage(
     let (input_reserve_in, input_reserve_out) =
         get_uniswap_v2_pair_reserves(&input_address, &graph, zero_for_one);
     let (output_reserve_in, output_reserve_out) =
-        get_uniswap_v2_pair_reserves(&output_address, &graph, zero_for_one);
+        get_uniswap_v2_pair_reserves(&output_address, &graph, !zero_for_one);
     let max_amount_in = max_amount_in(
         input_reserve_in,
         input_reserve_out,
@@ -270,7 +270,7 @@ fn calculate_profit(
     zero_for_one: bool,
 ) -> (U256, U256, U256, U256) {
     let mut i = U256::one();
-    let step_size = max_amount_in.div(U256::from(STEP_SIZE));
+    let step_size = max(U256::one(), max_amount_in.div(U256::from(NUMBER_OF_STEPS)));
     let mut profit = U256::zero();
     let mut amount_in_first = U256::zero();
     let mut amount_out_first = U256::zero();
