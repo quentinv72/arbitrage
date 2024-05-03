@@ -45,7 +45,7 @@ const APP_NAME: &str = env!("CARGO_CRATE_NAME");
 
 const NUMBER_OF_STEPS: u32 = 1000;
 
-const PRIORITY_FEE_PERCENTAGE: u32 = 80;
+const PRIORITY_FEE_PERCENTAGE: u32 = 95;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
