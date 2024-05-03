@@ -27,6 +27,14 @@ impl PoolsGraph {
         self._pool_address_to_pool_data.get(pool_address)
     }
 
+    pub fn debug_try_get(&self, pool_address: &Address) -> Ref<Address, PoolData> {
+        match self._pool_address_to_pool_data.try_get(pool_address) {
+            TryResult::Present(val) => val,
+            TryResult::Absent => panic!("Missing value for address {pool_address:?}"),
+            TryResult::Locked => panic!("The shard is locked......"),
+        }
+    }
+
     pub fn get_mut_pool_data(
         &self,
         pool_address: &Address,
