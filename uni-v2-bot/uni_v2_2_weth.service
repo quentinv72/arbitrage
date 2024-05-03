@@ -1,0 +1,12 @@
+[Unit]
+Description="Uniswap V2 arbitrage bot 2 WETH"
+
+[Service]
+User=bot
+Group=bot
+Type=simple
+ExecStart=/workspace/arbitrage/uni-v2-bot/target/release/uni-v2-bot
+EnvironmentFile=/uni-v2-bot.env
+
+[Install]
+WantedBy=multi-user.target
