@@ -64,6 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ws_client = utils.get_ws_client();
     let mut stream = ws_client.subscribe_blocks().await?;
     while let Some(block) = stream.next().await {
+        let start = Instant::now();
         let block_number = block.number.unwrap();
         if block_number != rpc_client.get_block_number().await? {
             continue;
@@ -123,6 +124,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let gas_estimate = gas_estimate_opt.unwrap();
 
             if gas_estimate.mul(next_base_fee) < top_item.get_estimated_profit() {
+                let elapsed = start.elapsed();
+                info!("It took {elapsed:.2?} to find this trade.. Is this too slow?");
                 match try_submit_trade(
                     &top_item,
                     cc.tx,
