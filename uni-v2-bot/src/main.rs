@@ -45,7 +45,7 @@ const APP_NAME: &str = env!("CARGO_CRATE_NAME");
 
 const NUMBER_OF_STEPS: u32 = 1000;
 
-const PRIORITY_FEE_PERCENTAGE: u32 = 95;
+const PRIORITY_FEE_PERCENTAGE: u32 = 999;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -305,15 +305,11 @@ async fn try_submit_trade<M: Middleware + 'static>(
     base_fee: U256,
     rpc_client: Arc<M>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    info!(
-        "Found a trade with estimated profit of {}",
-        arb.get_estimated_profit()
-    );
     let remaining_profit = arb.get_estimated_profit() - gas_estimate.mul(base_fee);
     // 50 % of estimated profits
     let max_priority_fee_per_gas = (remaining_profit.div(gas_estimate))
         .mul(U256::from(PRIORITY_FEE_PERCENTAGE))
-        .div(U256::from(100));
+        .div(U256::from(1000));
     let max_fee = base_fee + max_priority_fee_per_gas;
     info!(
         "Found a trade with estimated profit of {}",
