@@ -11,4 +11,5 @@ ethers = { version = "2.0.14", features = ["ws"] }
 ethers-flashbots = "0.15.0"
 log = "0.4.21"
 log4rs = { version = "1.3.0", features = ["json_encoder"] }
+once_cell = "1.19.0"
 url = "2.5.0"
