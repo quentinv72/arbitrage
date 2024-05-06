@@ -48,8 +48,13 @@ impl Arbitrage {
         amounts_out: Vec<U256>,
         zero_for_ones: Vec<bool>,
         amount_to_coinbase: U256,
+        profit: Option<U256>,
     ) -> Arbitrage {
-        let estimated_profit = amounts_out.last().unwrap() - amounts_in.first().unwrap();
+        let estimated_profit = match profit {
+            None => amounts_out.last().unwrap() - amounts_in.first().unwrap(),
+            Some(val) => val,
+        };
+
         Arbitrage {
             targets,
             amounts_in,
