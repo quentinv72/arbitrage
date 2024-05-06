@@ -1,0 +1,3 @@
+[submodule "uni-v2-3-weth-bot/lib/forge-std"]
+	path = uni-v2-3-weth-bot/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
