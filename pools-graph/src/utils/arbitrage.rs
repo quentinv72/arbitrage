@@ -195,6 +195,10 @@ impl Arbitrage {
         rpc_client: Arc<M>,
         priority_fee_percentage: u32,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        info!(
+            "Found a trade with estimated profit of {}",
+            estimated_profit
+        );
         let remaining_profit = estimated_profit - gas_estimate.mul(base_fee);
         let max_priority_fee_per_gas = (remaining_profit.div(gas_estimate))
             .mul(U256::from(priority_fee_percentage))
