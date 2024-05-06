@@ -2309,9 +2309,11 @@ dependencies = [
  "dashmap",
  "enum_dispatch",
  "ethers",
+ "eyre",
  "log",
  "reqwest-graphql",
  "serde",
+ "serde_json",
  "tokio",
  "utils",
 ]

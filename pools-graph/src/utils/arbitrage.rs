@@ -1,4 +1,6 @@
 use std::cmp::Ordering;
+use std::collections::HashSet;
+use std::ops::{Div, Mul};
 use std::sync::Arc;
 
 use crate::pool_data::pool_data::PoolDataTrait;
@@ -6,8 +8,9 @@ use contracts::qv_executor::QVExecutor;
 use ethers::abi::{encode, Token};
 use ethers::contract::ContractCall;
 use ethers::providers::Middleware;
+use ethers::types::transaction::eip2718::TypedTransaction;
 use ethers::types::{Address, Bytes, U256};
-use log::debug;
+use log::{debug, error, info, warn};
 
 use crate::pools_graph::PoolsGraph;
 
@@ -117,6 +120,93 @@ impl Arbitrage {
             output_token,
             next_call,
         )
+    }
+
+    pub async fn submit_transaction<M: Middleware>(
+        &self,
+        graph: &PoolsGraph,
+        output_token: Address,
+        bundle_executor_address: Address,
+        next_block_base_fee: U256,
+        mut has_reverted: &HashSet<Vec<Address>>,
+        client: Arc<M>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut cc = self.build_transaction(&graph, output_token, client, bundle_executor_address);
+
+        let gas_estimate_opt = match cc.estimate_gas().await {
+            Ok(est) => Some(est),
+            Err(e) => {
+                if e.is_revert() {
+                    if !has_reverted.contains(self.get_pair_addresses()) {
+                        warn!(
+                            "Gas estimate reverted for pairs {:#?} \nThe calldata {:#?}",
+                            self.get_pair_addresses(),
+                            cc.tx.data()
+                        );
+                        has_reverted.insert(self.get_pair_addresses().to_vec());
+                    }
+                } else {
+                    panic!("Got a strange error {e}")
+                }
+                None
+            }
+        };
+
+        if gas_estimate_opt.is_none() {
+            return Ok(());
+        }
+        let gas_estimate = gas_estimate_opt.unwrap();
+
+        if gas_estimate.mul(next_block_base_fee) < self.get_estimated_profit() {
+            let client_clone = Arc::clone(&client);
+            tokio::spawn(async move {
+                match self
+                    .try_submit_trade(cc.tx, gas_estimate, next_block_base_fee, client_clone)
+                    .await
+                {
+                    Ok(_) => (),
+                    Err(e) => {
+                        error!("Failed to submit trade... see error {e}");
+                    }
+                };
+            });
+        }
+        Ok(())
+    }
+
+    async fn try_submit_trade<M: Middleware + 'static>(
+        &self,
+        tx: TypedTransaction,
+        gas_estimate: U256,
+        base_fee: U256,
+        rpc_client: Arc<M>,
+        priority_fee_percentage: u32,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let remaining_profit = self.get_estimated_profit() - gas_estimate.mul(base_fee);
+        let max_priority_fee_per_gas = (remaining_profit.div(gas_estimate))
+            .mul(U256::from(priority_fee_percentage))
+            .div(U256::from(10000));
+        let max_fee = base_fee + max_priority_fee_per_gas;
+        match tx {
+            TypedTransaction::Eip1559(inner) => {
+                let tx: TypedTransaction = inner
+                    .gas(gas_estimate)
+                    .max_priority_fee_per_gas(max_priority_fee_per_gas)
+                    .max_fee_per_gas(max_fee)
+                    .chain_id(1)
+                    .into();
+                info!("Sending tx: {:#?}\n", tx);
+                let pending_tx = rpc_client.send_transaction(tx, None).await?;
+                let receipt = pending_tx
+                    .await?
+                    .ok_or_else(|| eyre::format_err!("tx dropped from mempool"))?;
+                let tx = rpc_client.get_transaction(receipt.transaction_hash).await?;
+                info!("Sent tx: {}\n", serde_json::to_string(&tx)?);
+                info!("Tx receipt: {}", serde_json::to_string(&receipt)?);
+                return Ok(());
+            }
+            _other => panic!("Uggh this should be EIP1559"),
+        };
     }
 
     fn build_data(amount_in: U256, target_address: Address, swap_data: Bytes) -> Bytes {
