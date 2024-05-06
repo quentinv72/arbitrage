@@ -18,7 +18,7 @@ use rayon::prelude::*;
 use utils::logging::setup_logging;
 use utils::utils::{FlashbotsProvider, Setup, Utils};
 
-const UNISWAP_V2_FACTORIES: [&str; 4] = [
+const UNISWAP_V2_FACTORIES: [&str; 5] = [
     "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
     "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac",
     // TODO suppport custom swap fee
