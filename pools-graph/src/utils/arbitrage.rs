@@ -122,16 +122,22 @@ impl Arbitrage {
         )
     }
 
-    pub async fn submit_transaction<M: Middleware>(
+    pub async fn submit_transaction<M: Middleware + 'static>(
         &self,
         graph: &PoolsGraph,
         output_token: Address,
         bundle_executor_address: Address,
         next_block_base_fee: U256,
-        mut has_reverted: &HashSet<Vec<Address>>,
+        has_reverted: &mut HashSet<Vec<Address>>,
         client: Arc<M>,
+        priority_fee_percentage: u32,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut cc = self.build_transaction(&graph, output_token, client, bundle_executor_address);
+        let mut cc = self.build_transaction(
+            &graph,
+            output_token,
+            Arc::clone(&client),
+            bundle_executor_address,
+        );
 
         let gas_estimate_opt = match cc.estimate_gas().await {
             Ok(est) => Some(est),
@@ -157,12 +163,19 @@ impl Arbitrage {
         }
         let gas_estimate = gas_estimate_opt.unwrap();
 
-        if gas_estimate.mul(next_block_base_fee) < self.get_estimated_profit() {
+        if gas_estimate.mul(next_block_base_fee) < self.estimated_profit {
             let client_clone = Arc::clone(&client);
+            let estimated_profit = self.estimated_profit;
             tokio::spawn(async move {
-                match self
-                    .try_submit_trade(cc.tx, gas_estimate, next_block_base_fee, client_clone)
-                    .await
+                match Self::try_submit_trade(
+                    estimated_profit,
+                    cc.tx,
+                    gas_estimate,
+                    next_block_base_fee,
+                    client_clone,
+                    priority_fee_percentage,
+                )
+                .await
                 {
                     Ok(_) => (),
                     Err(e) => {
@@ -175,17 +188,17 @@ impl Arbitrage {
     }
 
     async fn try_submit_trade<M: Middleware + 'static>(
-        &self,
+        estimated_profit: U256,
         tx: TypedTransaction,
         gas_estimate: U256,
         base_fee: U256,
         rpc_client: Arc<M>,
         priority_fee_percentage: u32,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let remaining_profit = self.get_estimated_profit() - gas_estimate.mul(base_fee);
+        let remaining_profit = estimated_profit - gas_estimate.mul(base_fee);
         let max_priority_fee_per_gas = (remaining_profit.div(gas_estimate))
             .mul(U256::from(priority_fee_percentage))
-            .div(U256::from(10000));
+            .div(U256::from(10_000));
         let max_fee = base_fee + max_priority_fee_per_gas;
         match tx {
             TypedTransaction::Eip1559(inner) => {
