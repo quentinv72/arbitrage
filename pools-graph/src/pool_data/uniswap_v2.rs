@@ -1,12 +1,11 @@
-use std::any::Any;
-use std::ops::{Div, Mul};
-use std::sync::Arc;
-
 use contracts::i_uniswap_v_2_pair::IUniswapV2Pair;
 use ethers::middleware::Middleware;
 use ethers::prelude::{Bytes, ContractError, U256};
 use ethers::types::{Address, U64};
 use log::warn;
+use std::any::Any;
+use std::ops::{Div, Mul};
+use std::sync::Arc;
 
 use crate::pool_data::pool_data::{PoolData, PoolDataTrait};
 
@@ -83,7 +82,6 @@ impl UniswapV2 {
         let numerator = amount_in_with_fee.mul(reserve_out);
         let denominator = (reserve_in.mul(U256::from(1_000))) + (amount_in_with_fee);
         if denominator.is_zero() {
-            warn!("amount in: {amount_in}, reserve in: {reserve_in}, reserve out: {reserve_out}");
             return U256::from(0);
         }
         numerator.div(denominator)
