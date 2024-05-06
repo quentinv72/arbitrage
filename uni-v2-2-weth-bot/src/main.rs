@@ -125,24 +125,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let gas_estimate = gas_estimate_opt.unwrap();
 
             if gas_estimate.mul(next_base_fee) < top_item.get_estimated_profit() {
-                let elapsed = start.elapsed();
-                info!("It took {elapsed:.2?} to find this trade.. Is this too slow?");
-                match try_submit_trade(
-                    &top_item,
-                    cc.tx,
-                    gas_estimate,
-                    next_base_fee,
-                    Arc::clone(&rpc_client),
-                )
-                .await
-                {
-                    Ok(_) => break,
-                    Err(e) => {
-                        error!("Failed to submit trade... see error {e}");
-                        // need to break because waited until next block to check success
-                        break;
-                    }
-                };
+                info!(
+                    "It took {:.2?} to find this trade.. Is this too slow?",
+                    start.elapsed()
+                );
+                let client_clone = Arc::clone(&rpc_client);
+                tokio::spawn(async move {
+                    match try_submit_trade(
+                        &top_item,
+                        cc.tx,
+                        gas_estimate,
+                        next_base_fee,
+                        client_clone,
+                    )
+                    .await
+                    {
+                        Ok(_) => (),
+                        Err(e) => {
+                            error!("Failed to submit trade... see error {e}");
+                            // need to break because waited until next block to check success
+                        }
+                    };
+                });
             };
         }
     }

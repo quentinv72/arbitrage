@@ -18,8 +18,8 @@ use rayon::prelude::*;
 use utils::logging::setup_logging;
 use utils::utils::{FlashbotsProvider, Setup, Utils};
 
-const UNISWAP_V2_FACTORIES: [&str; 5] = [
-    "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
+const UNISWAP_V2_FACTORIES: [&str; 4] = [
+    // "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
     "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac",
     // TODO suppport custom swap fee
     // "0x0388c1e0f210abae597b7de712b9510c6c36c857",
@@ -47,9 +47,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let graph = Arc::new(PoolsGraph::new());
     uniswap_v2::load_uniswap_v2_pairs(&graph, factories, Arc::clone(&rpc_client)).await?;
     let all_paths = get_all_paths(&graph);
+    let mut has_reverted: HashSet<Vec<Address>> = HashSet::new();
     info!("There are {} paths", all_paths.len());
-    // Set of blacklisted addresses because of failures to trade on token
-    // let mut blacklist: HashSet<Address> = HashSet::new();
     let ws_client = utils.get_ws_client();
     let mut stream = ws_client.subscribe_blocks().await?;
     while let Some(block) = stream.next().await {
@@ -89,8 +88,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(est) => Some(est),
                 Err(e) => {
                     if e.is_revert() {
-                        let eth_err: QVExecutorErrors = e.decode_contract_revert().unwrap();
-                        warn!("Gas estimate reverted for pairs .... {:#?}", cc.tx);
+                        if !has_reverted.contains(top_item.get_pair_addresses()) {
+                            warn!(
+                                "Gas estimate reverted for pairs {:#?} \nThe calldata {:#?}",
+                                top_item.get_pair_addresses(),
+                                cc.tx.data()
+                            );
+                            has_reverted.insert(top_item.get_pair_addresses().to_vec());
+                        }
                     } else {
                         panic!("Got a strange error {e}")
                     }
@@ -108,23 +113,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "It took {:.2?} to find this trade.. Is this too slow?",
                     start.elapsed()
                 );
-                match try_submit_trade(
-                    &top_item,
-                    cc.tx,
-                    gas_estimate,
-                    next_base_fee,
-                    Arc::clone(&rpc_client),
-                )
-                .await
-                {
-                    Ok(_) => break,
-                    Err(e) => {
-                        error!("Failed to submit trade... see error {e}");
-                        // need to break because waited until next block to check success
-                        break;
-                    }
-                };
-            };
+                let client_clone = Arc::clone(&rpc_client);
+                tokio::spawn(async move {
+                    match try_submit_trade(
+                        &top_item,
+                        cc.tx,
+                        gas_estimate,
+                        next_base_fee,
+                        client_clone,
+                    )
+                    .await
+                    {
+                        Ok(_) => (),
+                        Err(e) => {
+                            error!("Failed to submit trade... see error {e}");
+                        }
+                    };
+                });
+            }
         }
     }
     Ok(())
