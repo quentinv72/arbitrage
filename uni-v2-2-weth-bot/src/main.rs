@@ -27,6 +27,7 @@ use rayon::iter::ParallelIterator;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use utils::logging::setup_logging;
+use utils::TOKEN_BLACKLIST;
 use utils::utils::{FlashbotsProvider, Setup, Utils};
 
 const UNISWAP_V2_FACTORIES: [&str; 5] = [
@@ -60,8 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     uniswap_v2::load_uniswap_v2_pairs(&graph, factories, Arc::clone(&rpc_client)).await?;
     let paths = get_paths_2(&graph, WETH.parse()?);
     info!("Found {} paths", paths.len());
-    // Set of blacklisted addresses because of failures to trade on token
-    let mut blacklist: HashSet<Address> = HashSet::new();
+    let mut has_reverted: HashSet<Vec<Address>> = HashSet::new();
     let ws_client = utils.get_ws_client();
     let mut stream = ws_client.subscribe_blocks().await?;
     while let Some(block) = stream.next().await {
@@ -75,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         update_reserves(block_number, &paths, graph.clone(), Arc::clone(&rpc_client)).await?;
         let mut profitable_trades = paths
             .par_iter()
-            .filter(|x| !blacklist.contains(&x.0) && !blacklist.contains(&x.1))
+            .filter(|x| !TOKEN_BLACKLIST.contains(&x.0) && !TOKEN_BLACKLIST.contains(&x.1))
             .map(|x| try_finding_arbitrage(&graph, x.0, x.1))
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
@@ -92,27 +92,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
 
             let gas_estimate_opt = match cc.estimate_gas().await {
-                Ok(est) => {
-                    top_item.get_pair_addresses().iter().for_each(|x| {
-                        if blacklist.contains(x) {
-                            info!("Removing {x} from blacklist");
-                            blacklist.remove(x);
-                        }
-                    });
-                    Some(est)
-                }
+                Ok(est) => Some(est),
                 Err(e) => {
                     if e.is_revert() {
-                        let eth_err: QVExecutorErrors = e.decode_contract_revert().unwrap();
-                        top_item.get_pair_addresses().iter().for_each(|x| {
-                            blacklist.insert(x.clone());
-                            ()
-                        });
-                        warn!(
-                            "Bad arbitrage... Gas estimate reverted. Blacklisting pairs {:#?} \n\
-                            Revert data --- {eth_err}",
-                            top_item.get_pair_addresses()
-                        );
+                        if !has_reverted.contains(top_item.get_pair_addresses()) {
+                            warn!(
+                                "Gas estimate reverted for pairs {:#?} \nThe calldata {:#?}",
+                                top_item.get_pair_addresses(),
+                                cc.tx.data()
+                            );
+                            has_reverted.insert(top_item.get_pair_addresses().to_vec());
+                        }
                     } else {
                         panic!("Got a strange error {e}")
                     }
@@ -186,6 +176,7 @@ fn try_finding_arbitrage(
                 vec![amount_out_first, amount_out_second],
                 vec![zero_for_one, !zero_for_one],
                 U256::zero(),
+                None,
             ));
         }
     }
