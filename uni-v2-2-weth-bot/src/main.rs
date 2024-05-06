@@ -47,7 +47,7 @@ const APP_NAME: &str = env!("CARGO_CRATE_NAME");
 
 const NUMBER_OF_STEPS: u32 = 1000;
 
-const PRIORITY_FEE_PERCENTAGE: u32 = 999;
+const PRIORITY_FEE_PERCENTAGE: u32 = 99_99;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -84,60 +84,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         profitable_trades.sort();
         while profitable_trades.len() > 0 {
             let top_item = profitable_trades.pop().unwrap();
-            let mut cc = top_item.build_transaction(
-                &graph,
-                WETH.parse()?,
-                Arc::clone(&rpc_client),
-                utils.get_bundle_executor_address(),
-            );
-
-            let gas_estimate_opt = match cc.estimate_gas().await {
-                Ok(est) => Some(est),
-                Err(e) => {
-                    if e.is_revert() {
-                        if !has_reverted.contains(top_item.get_pair_addresses()) {
-                            warn!(
-                                "Gas estimate reverted for pairs {:#?} \nThe calldata {:#?}",
-                                top_item.get_pair_addresses(),
-                                cc.tx.data()
-                            );
-                            has_reverted.insert(top_item.get_pair_addresses().to_vec());
-                        }
-                    } else {
-                        panic!("Got a strange error {e}")
-                    }
-                    None
-                }
-            };
-            if gas_estimate_opt.is_none() {
-                continue;
-            }
-            let gas_estimate = gas_estimate_opt.unwrap();
-
-            if gas_estimate.mul(next_base_fee) < top_item.get_estimated_profit() {
-                info!(
-                    "It took {:.2?} to find this trade.. Is this too slow?",
-                    start.elapsed()
-                );
-                let client_clone = Arc::clone(&rpc_client);
-                tokio::spawn(async move {
-                    match try_submit_trade(
-                        &top_item,
-                        cc.tx,
-                        gas_estimate,
-                        next_base_fee,
-                        client_clone,
-                    )
-                    .await
-                    {
-                        Ok(_) => (),
-                        Err(e) => {
-                            error!("Failed to submit trade... see error {e}");
-                            // need to break because waited until next block to check success
-                        }
-                    };
-                });
-            };
+            top_item
+                .submit_transaction(
+                    &graph,
+                    WETH.parse()?,
+                    utils.get_bundle_executor_address(),
+                    next_base_fee,
+                    &mut has_reverted,
+                    Arc::clone(&rpc_client),
+                    PRIORITY_FEE_PERCENTAGE,
+                )
+                .await?;
         }
     }
 
@@ -295,43 +252,4 @@ fn calculate_profit(
         i += step_size;
     }
     (amount_in_first, amount_out_first, amount_out_second, profit)
-}
-
-async fn try_submit_trade<M: Middleware + 'static>(
-    arb: &Arbitrage,
-    tx: TypedTransaction,
-    gas_estimate: U256,
-    base_fee: U256,
-    rpc_client: Arc<M>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let remaining_profit = arb.get_estimated_profit() - gas_estimate.mul(base_fee);
-    // 50 % of estimated profits
-    let max_priority_fee_per_gas = (remaining_profit.div(gas_estimate))
-        .mul(U256::from(PRIORITY_FEE_PERCENTAGE))
-        .div(U256::from(1000));
-    let max_fee = base_fee + max_priority_fee_per_gas;
-    info!(
-        "Found a trade with estimated profit of {}",
-        arb.get_estimated_profit()
-    );
-    match tx {
-        TypedTransaction::Eip1559(inner) => {
-            let tx: TypedTransaction = inner
-                .gas(gas_estimate)
-                .max_priority_fee_per_gas(max_priority_fee_per_gas)
-                .max_fee_per_gas(max_fee)
-                .chain_id(1)
-                .into();
-            info!("Sending tx: {:#?}\n", tx);
-            let pending_tx = rpc_client.send_transaction(tx, None).await?;
-            let receipt = pending_tx
-                .await?
-                .ok_or_else(|| eyre::format_err!("tx dropped from mempool"))?;
-            let tx = rpc_client.get_transaction(receipt.transaction_hash).await?;
-            info!("Sent tx: {}\n", serde_json::to_string(&tx)?);
-            info!("Tx receipt: {}", serde_json::to_string(&receipt)?);
-            return Ok(());
-        }
-        _other => panic!("Uggh this should be EIP1559"),
-    };
 }
