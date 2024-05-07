@@ -1,4 +1,5 @@
 use contracts::i_uniswap_v_2_pair::IUniswapV2Pair;
+use ethers::core::k256::elliptic_curve::consts::U25;
 use ethers::middleware::Middleware;
 use ethers::prelude::{Bytes, ContractError, U256};
 use ethers::types::{Address, U64};
@@ -17,33 +18,17 @@ pub struct UniswapV2 {
     token_1: Address,
     reserve_1: u128,
     block_last_updated: U64,
+    swap_fee: U256,
 }
 
 impl UniswapV2 {
-    pub fn new(
-        pair_address: Address,
-        token_0: Address,
-        reserve_0: u128,
-        token_1: Address,
-        reserve_1: u128,
-        block_last_updated: U64,
-    ) -> Self {
-        Self {
-            pair_address,
-            token_0,
-            reserve_0,
-            token_1,
-            reserve_1,
-            block_last_updated,
-        }
-    }
-
     pub fn get_reserves(&self) -> (u128, u128) {
         (self.reserve_0, self.reserve_1)
     }
 
     pub async fn new_from_client<M: Middleware>(
         pair_address: Address,
+        swap_fee: U256,
         client: Arc<M>,
     ) -> Result<UniswapV2, ContractError<M>> {
         let pool_contract = IUniswapV2Pair::new(pair_address, client);
@@ -57,6 +42,7 @@ impl UniswapV2 {
             reserve_0,
             reserve_1,
             block_last_updated: U64::zero(),
+            swap_fee,
         })
     }
 
@@ -77,8 +63,34 @@ impl UniswapV2 {
         }
     }
 
-    fn get_amount_out(amount_in: U256, reserve_in: U256, reserve_out: U256) -> U256 {
-        let amount_in_with_fee = amount_in.mul(U256::from(997));
+    // this is only used by the pools graph test
+    pub(crate) fn new(
+        pair_address: Address,
+        token_0: Address,
+        reserve_0: u128,
+        token_1: Address,
+        reserve_1: u128,
+        block_last_updated: U64,
+    ) -> Self {
+        Self {
+            pair_address,
+            token_0,
+            reserve_0,
+            token_1,
+            reserve_1,
+            block_last_updated,
+            swap_fee: U256::zero(),
+        }
+    }
+
+    fn get_amount_out(
+        amount_in: U256,
+        reserve_in: U256,
+        reserve_out: U256,
+        swap_fee: U256,
+    ) -> U256 {
+        let calc_fee = U256::from(1_000) - swap_fee;
+        let amount_in_with_fee = amount_in.mul(U256::from(calc_fee));
         let numerator = amount_in_with_fee.mul(reserve_out);
         let denominator = (reserve_in.mul(U256::from(1_000))) + (amount_in_with_fee);
         if denominator.is_zero() {
@@ -112,7 +124,12 @@ impl PoolDataTrait for UniswapV2 {
         } else {
             self.reserve_0
         };
-        Self::get_amount_out(amount_in, U256::from(reserve_in), U256::from(reserve_out))
+        Self::get_amount_out(
+            amount_in,
+            U256::from(reserve_in),
+            U256::from(reserve_out),
+            self.swap_fee,
+        )
     }
 
     fn build_swap_calldata<M: Middleware>(
