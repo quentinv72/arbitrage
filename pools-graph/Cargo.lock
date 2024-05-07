@@ -2311,6 +2311,7 @@ dependencies = [
  "ethers",
  "eyre",
  "log",
+ "once_cell",
  "reqwest-graphql",
  "serde",
  "serde_json",
