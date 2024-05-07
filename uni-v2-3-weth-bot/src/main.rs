@@ -16,6 +16,7 @@ use pools_graph::utils::arbitrage::Arbitrage;
 use pools_graph::utils::uniswap_v2;
 use rayon::prelude::*;
 use utils::logging::setup_logging;
+use utils::TOKEN_BLACKLIST;
 use utils::utils::{FlashbotsProvider, Setup, Utils};
 
 const UNISWAP_V2_FACTORIES: [&str; 5] = [
@@ -97,6 +98,9 @@ fn get_all_paths(graph: &PoolsGraph) -> Vec<Path> {
         .get_neighbouring_tokens(&WETH.parse().unwrap())
         .unwrap();
     for input_token in input_tokens.value().iter() {
+        if TOKEN_BLACKLIST.contains(&input_token) {
+            continue;
+        }
         let weth_output_pools = graph
             .get_pool_addresses(input_token.clone(), WETH.parse().unwrap())
             .unwrap()
