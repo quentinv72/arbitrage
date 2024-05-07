@@ -123,6 +123,7 @@ pub async fn refresh_reserves<M: Middleware>(
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Factory {
     address: Address,
     swap_fee: U256,
