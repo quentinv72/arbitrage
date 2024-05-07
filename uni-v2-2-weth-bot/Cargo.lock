@@ -433,7 +433,7 @@ checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 [[package]]
 name = "contracts"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#01a6b04c9ea2ebd478834dafbde85d4312901884"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#1f32043fee13719eac7cd385fd51a58c2dd7bc3d"
 dependencies = [
  "convert_case",
  "ethers",
@@ -2304,7 +2304,7 @@ checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 [[package]]
 name = "pools-graph"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#01a6b04c9ea2ebd478834dafbde85d4312901884"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#1f32043fee13719eac7cd385fd51a58c2dd7bc3d"
 dependencies = [
  "contracts",
  "dashmap",
@@ -2312,6 +2312,7 @@ dependencies = [
  "ethers",
  "eyre",
  "log",
+ "once_cell",
  "reqwest-graphql",
  "serde",
  "serde_json",
@@ -3652,7 +3653,7 @@ checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
 [[package]]
 name = "utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#01a6b04c9ea2ebd478834dafbde85d4312901884"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#1f32043fee13719eac7cd385fd51a58c2dd7bc3d"
 dependencies = [
  "either",
  "ethers",

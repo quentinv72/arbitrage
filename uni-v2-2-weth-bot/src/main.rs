@@ -6,11 +6,11 @@ use std::sync::Arc;
 
 use contracts::qv_executor::QVExecutorErrors;
 use ethers::abi::Hash;
-use ethers::contract::{ContractCall, EthError};
+use ethers::contract::{ContractCall, EthError, Lazy};
 use ethers::core::k256::elliptic_curve::consts::U2;
 use ethers::middleware::Middleware;
-use ethers::prelude::{ContractError, SignerMiddleware};
 use ethers::prelude::transaction::eip2718::TypedTransaction;
+use ethers::prelude::{ContractError, SignerMiddleware};
 use ethers::providers::StreamExt;
 use ethers::signers::Signer;
 use ethers::types::{Address, U256, U64};
@@ -22,22 +22,25 @@ use pools_graph::pool_data::uniswap_v2::UniswapV2;
 use pools_graph::pools_graph::PoolsGraph;
 use pools_graph::utils::arbitrage::Arbitrage;
 use pools_graph::utils::uniswap_v2;
+use pools_graph::utils::uniswap_v2::{
+    Factory, CRO_DEFI_FACTORY, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY, SUSHISWAP_FACTORY,
+    UNISWAP_V2_FACTORY, ZEUS_FACTORY,
+};
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use utils::logging::setup_logging;
-use utils::TOKEN_BLACKLIST;
 use utils::utils::{FlashbotsProvider, Setup, Utils};
+use utils::TOKEN_BLACKLIST;
 
-const UNISWAP_V2_FACTORIES: [&str; 5] = [
-    "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
-    "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac",
-    // TODO https://github.com/quentinv72/arbitrage/issues/1
-    // "0x0388c1e0f210abae597b7de712b9510c6c36c857",
-    "0x9DEB29c9a4c7A88a3C0257393b7f3335338D9A9D",
-    "0xbdda21dd8da31d5bee0c9bb886c044ebb9b8906a",
-    "0x1097053Fd2ea711dad45caCcc45EfF7548fCB362",
+static V2_FACTORIES: [&Lazy<Factory>; 6] = [
+    &UNISWAP_V2_FACTORY,
+    &SUSHISWAP_FACTORY,
+    &LUA_SWAP_FACTORY,
+    &CRO_DEFI_FACTORY,
+    &ZEUS_FACTORY,
+    &PANCAKE_SWAP_FACTORY,
 ];
 
 const WETH: &str = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
@@ -54,9 +57,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let utils = Utils::setup().await;
     setup_logging(utils.is_production(), APP_NAME);
     let rpc_client = utils.get_rpc_client();
-    let factories = UNISWAP_V2_FACTORIES
-        .map(|x| x.parse::<Address>().unwrap())
-        .to_vec();
+    let factories = V2_FACTORIES
+        .iter()
+        .map(|x| Lazy::force(x))
+        .collect::<Vec<_>>();
     let graph = Arc::new(PoolsGraph::new());
     uniswap_v2::load_uniswap_v2_pairs(&graph, factories, Arc::clone(&rpc_client)).await?;
     let paths = get_paths_2(&graph, WETH.parse()?);
