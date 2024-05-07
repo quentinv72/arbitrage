@@ -9,11 +9,54 @@ use dashmap::try_result::TryResult;
 use ethers::contract::ContractError;
 use ethers::prelude::U64;
 use ethers::providers::Middleware;
-use ethers::types::{Address, U256};
+use ethers::types::{Address, H160, U256};
 use log::{debug, error, info, warn};
+use once_cell::sync::Lazy;
 
 use crate::pool_data::uniswap_v2::UniswapV2;
 use crate::pools_graph::PoolsGraph;
+
+pub static UNISWAP_V2_FACTORY: Lazy<Factory> = Lazy::new(|| Factory {
+    address: "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f"
+        .parse()
+        .unwrap(),
+    swap_fee: U256::from(3),
+});
+
+pub static SUSHISWAP_FACTORY: Lazy<Factory> = Lazy::new(|| Factory {
+    address: "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac"
+        .parse()
+        .unwrap(),
+    swap_fee: U256::from(3),
+});
+
+pub static LUA_SWAP_FACTORY: Lazy<Factory> = Lazy::new(|| Factory {
+    address: "0x0388c1e0f210abae597b7de712b9510c6c36c857"
+        .parse()
+        .unwrap(),
+    swap_fee: U256::from(4),
+});
+
+pub static CRO_DEFI_FACTORY: Lazy<Factory> = Lazy::new(|| Factory {
+    address: "0x9DEB29c9a4c7A88a3C0257393b7f3335338D9A9D"
+        .parse()
+        .unwrap(),
+    swap_fee: U256::from(3),
+});
+
+pub static ZEUS_FACTORY: Lazy<Factory> = Lazy::new(|| Factory {
+    address: "0xbdda21dd8da31d5bee0c9bb886c044ebb9b8906a"
+        .parse()
+        .unwrap(),
+    swap_fee: U256::from(3),
+});
+
+pub static PANCAKE_SWAP_FACTORY: Lazy<Factory> = Lazy::new(|| Factory {
+    address: "0x1097053Fd2ea711dad45caCcc45EfF7548fCB362"
+        .parse()
+        .unwrap(),
+    swap_fee: U256::from(3),
+});
 
 pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
     pools_graph: &PoolsGraph,
@@ -80,7 +123,7 @@ pub async fn refresh_reserves<M: Middleware>(
     }
 }
 
-pub struct Factory {
+struct Factory {
     address: Address,
     swap_fee: U256,
 }
