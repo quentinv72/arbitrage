@@ -123,7 +123,7 @@ pub async fn refresh_reserves<M: Middleware>(
     }
 }
 
-struct Factory {
+pub struct Factory {
     address: Address,
     swap_fee: U256,
 }
