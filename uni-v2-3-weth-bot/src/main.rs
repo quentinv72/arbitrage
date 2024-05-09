@@ -23,8 +23,6 @@ use utils::logging::setup_logging;
 use utils::TOKEN_BLACKLIST;
 use utils::utils::{FlashbotsProvider, Setup, Utils};
 
-use utils::TOKEN_BLACKLIST;
-
 static V2_FACTORIES: [&Lazy<Factory>; 6] = [
     &UNISWAP_V2_FACTORY,
     &SUSHISWAP_FACTORY,
