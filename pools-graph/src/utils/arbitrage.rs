@@ -227,16 +227,21 @@ impl Arbitrage {
                 let simulated_bundle = rpc_client.inner().simulate_bundle(&bundle).await?;
                 info!("Simulated bundle: {:#?}", simulated_bundle);
                 // Send it
-                let pending_bundle = rpc_client.inner().send_bundle(&bundle).await?;
-                match pending_bundle.await {
-                    Ok(bundle_hash) => info!(
-                        "Bundle with hash {:?} was included in target block",
-                        bundle_hash
-                    ),
-                    Err(PendingBundleError::BundleNotIncluded) => {
-                        error!("Bundle was not included in target block.")
+                let results = rpc_client.inner().send_bundle(&bundle).await?;
+                for result in results {
+                    match result {
+                        Ok(pending_bundle) => match pending_bundle.await {
+                            Ok(bundle_hash) => info!(
+                                "Bundle with hash {:?} was included in target block",
+                                bundle_hash
+                            ),
+                            Err(PendingBundleError::BundleNotIncluded) => {
+                                error!("Bundle was not included in target block.")
+                            }
+                            Err(e) => error!("An error occured: {}", e),
+                        },
+                        Err(e) => error!("An error occured: {}", e),
                     }
-                    Err(e) => error!("An error occured: {}", e),
                 }
                 return Ok(());
             }
