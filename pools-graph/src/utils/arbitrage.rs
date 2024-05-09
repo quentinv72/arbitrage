@@ -224,8 +224,8 @@ impl Arbitrage {
                     .set_simulation_timestamp(0);
 
                 // Simulate it
-                let simulated_bundle = rpc_client.inner().simulate_bundle(&bundle).await?;
-                info!("Simulated bundle: {:#?}", simulated_bundle);
+                // let simulated_bundle = rpc_client.inner().simulate_bundle(&bundle).await?;
+                // info!("Simulated bundle: {:#?}", simulated_bundle);
                 // Send it
                 let results = rpc_client.inner().send_bundle(&bundle).await?;
                 for result in results {
