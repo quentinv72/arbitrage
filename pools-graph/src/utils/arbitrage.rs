@@ -7,14 +7,15 @@ use crate::pool_data::pool_data::PoolDataTrait;
 use contracts::qv_executor::QVExecutor;
 use ethers::abi::{encode, Token};
 use ethers::contract::ContractCall;
+use ethers::prelude::*;
 use ethers::providers::Middleware;
 use ethers::types::transaction::eip2718::TypedTransaction;
-use ethers::types::{Address, Bytes, U256};
+use ethers::types::{Address, Bytes, U256, U64};
+use ethers_flashbots::*;
 use log::{debug, error, info, warn};
+use utils::utils::FlashbotsProvider;
 
 use crate::pools_graph::PoolsGraph;
-
-const BUNDLE_EXECUTOR_ADDRESS: &str = "0x2f5A6dd5bCB5ba085e5f6e2DBF43a0BeA4b6fdfC";
 
 #[derive(Eq, Debug)]
 pub struct Arbitrage {
@@ -76,7 +77,7 @@ impl Arbitrage {
         &self.targets
     }
 
-    pub fn build_transaction<M: Middleware>(
+    fn build_transaction<M: Middleware>(
         &self,
         pools_graph: &PoolsGraph,
         output_token: Address,
@@ -122,15 +123,16 @@ impl Arbitrage {
         )
     }
 
-    pub async fn submit_transaction<M: Middleware + 'static>(
+    pub async fn submit_transaction_flashbots(
         &self,
         graph: &PoolsGraph,
         output_token: Address,
         bundle_executor_address: Address,
         next_block_base_fee: U256,
         has_reverted: &mut HashSet<Vec<Address>>,
-        client: Arc<M>,
+        client: Arc<FlashbotsProvider>,
         priority_fee_percentage: u32,
+        block_number: U64,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut cc = self.build_transaction(
             &graph,
@@ -167,13 +169,14 @@ impl Arbitrage {
             let client_clone = Arc::clone(&client);
             let estimated_profit = self.estimated_profit;
             tokio::spawn(async move {
-                match Self::try_submit_trade(
+                match Self::try_submit_trade_flashbots(
                     estimated_profit,
                     cc.tx,
                     gas_estimate,
                     next_block_base_fee,
                     client_clone,
                     priority_fee_percentage,
+                    block_number,
                 )
                 .await
                 {
@@ -187,13 +190,14 @@ impl Arbitrage {
         Ok(())
     }
 
-    async fn try_submit_trade<M: Middleware + 'static>(
+    async fn try_submit_trade_flashbots(
         estimated_profit: U256,
         tx: TypedTransaction,
         gas_estimate: U256,
         base_fee: U256,
-        rpc_client: Arc<M>,
+        rpc_client: Arc<FlashbotsProvider>,
         priority_fee_percentage: u32,
+        block_number: U64,
     ) -> Result<(), Box<dyn std::error::Error>> {
         info!(
             "Found a trade with estimated profit of {}",
@@ -212,14 +216,29 @@ impl Arbitrage {
                     .max_fee_per_gas(max_fee)
                     .chain_id(1)
                     .into();
-                info!("Sending tx: {:#?}\n", tx);
-                let pending_tx = rpc_client.send_transaction(tx, None).await?;
-                let receipt = pending_tx
-                    .await?
-                    .ok_or_else(|| eyre::format_err!("tx dropped from mempool"))?;
-                let tx = rpc_client.get_transaction(receipt.transaction_hash).await?;
-                info!("Sent tx: {}\n", serde_json::to_string(&tx)?);
-                info!("Tx receipt: {}", serde_json::to_string(&receipt)?);
+                let signature = rpc_client.signer().sign_transaction(&tx).await?;
+                let bundle = BundleRequest::new()
+                    .push_transaction(tx.rlp_signed(&signature))
+                    .set_block(block_number + 1)
+                    .set_simulation_block(block_number)
+                    .set_simulation_timestamp(0);
+
+                // Simulate it
+                let simulated_bundle: SimulatedBundle =
+                    rpc_client.inner().simulate_bundle(&bundle).await?;
+                info!("Simulated bundle: {:#?}", simulated_bundle);
+                // Send it
+                let pending_bundle = rpc_client.inner().send_bundle(&bundle).await?;
+                match pending_bundle.await {
+                    Ok(bundle_hash) => info!(
+                        "Bundle with hash {:?} was included in target block",
+                        bundle_hash
+                    ),
+                    Err(PendingBundleError::BundleNotIncluded) => {
+                        error!("Bundle was not included in target block.")
+                    }
+                    Err(e) => error!("An error occured: {}", e),
+                }
                 return Ok(());
             }
             _other => panic!("Uggh this should be EIP1559"),

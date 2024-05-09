@@ -433,7 +433,7 @@ checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 [[package]]
 name = "contracts"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#ac85dcc0714ae3d0b50adac7b455ff50c1da4014"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#392b41120f129b26398fa4262cc977b7f7b4e625"
 dependencies = [
  "convert_case",
  "ethers",
@@ -2309,6 +2309,7 @@ dependencies = [
  "dashmap",
  "enum_dispatch",
  "ethers",
+ "ethers-flashbots",
  "eyre",
  "log",
  "once_cell",
@@ -3623,13 +3624,14 @@ checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
 [[package]]
 name = "utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#ac85dcc0714ae3d0b50adac7b455ff50c1da4014"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#392b41120f129b26398fa4262cc977b7f7b4e625"
 dependencies = [
  "either",
  "ethers",
  "ethers-flashbots",
  "log",
  "log4rs",
+ "once_cell",
  "url",
 ]
 
