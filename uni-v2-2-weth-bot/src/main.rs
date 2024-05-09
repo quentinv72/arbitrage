@@ -9,8 +9,8 @@ use ethers::abi::Hash;
 use ethers::contract::{ContractCall, EthError, Lazy};
 use ethers::core::k256::elliptic_curve::consts::U2;
 use ethers::middleware::Middleware;
-use ethers::prelude::transaction::eip2718::TypedTransaction;
 use ethers::prelude::{ContractError, SignerMiddleware};
+use ethers::prelude::transaction::eip2718::TypedTransaction;
 use ethers::providers::StreamExt;
 use ethers::signers::Signer;
 use ethers::types::{Address, U256, U64};
@@ -23,7 +23,7 @@ use pools_graph::pools_graph::PoolsGraph;
 use pools_graph::utils::arbitrage::Arbitrage;
 use pools_graph::utils::uniswap_v2;
 use pools_graph::utils::uniswap_v2::{
-    Factory, CRO_DEFI_FACTORY, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY, SUSHISWAP_FACTORY,
+    CRO_DEFI_FACTORY, Factory, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY, SUSHISWAP_FACTORY,
     UNISWAP_V2_FACTORY, ZEUS_FACTORY,
 };
 use rayon::iter::IntoParallelRefIterator;
@@ -31,8 +31,8 @@ use rayon::iter::ParallelIterator;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use utils::logging::setup_logging;
-use utils::utils::{FlashbotsProvider, Setup, Utils};
 use utils::TOKEN_BLACKLIST;
+use utils::utils::{FlashbotsProvider, Setup, Utils};
 
 static V2_FACTORIES: [&Lazy<Factory>; 6] = [
     &UNISWAP_V2_FACTORY,
@@ -89,7 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while profitable_trades.len() > 0 {
             let top_item = profitable_trades.pop().unwrap();
             top_item
-                .submit_transaction(
+                .submit_transaction_flashbots(
                     &graph,
                     WETH.parse()?,
                     utils.get_bundle_executor_address(),
@@ -97,6 +97,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &mut has_reverted,
                     Arc::clone(&rpc_client),
                     PRIORITY_FEE_PERCENTAGE,
+                    block_number,
                 )
                 .await?;
         }

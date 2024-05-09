@@ -23,6 +23,8 @@ use utils::logging::setup_logging;
 use utils::TOKEN_BLACKLIST;
 use utils::utils::{FlashbotsProvider, Setup, Utils};
 
+use utils::TOKEN_BLACKLIST;
+
 static V2_FACTORIES: [&Lazy<Factory>; 6] = [
     &UNISWAP_V2_FACTORY,
     &SUSHISWAP_FACTORY,
@@ -81,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while profitable_trades.len() > 0 {
             let top_item = profitable_trades.pop().unwrap();
             top_item
-                .submit_transaction(
+                .submit_transaction_flashbots(
                     &graph,
                     WETH.parse()?,
                     utils.get_bundle_executor_address(),
@@ -89,6 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &mut has_reverted,
                     Arc::clone(&rpc_client),
                     PRIORITY_FEE_PERCENTAGE,
+                    block_number,
                 )
                 .await?;
         }
