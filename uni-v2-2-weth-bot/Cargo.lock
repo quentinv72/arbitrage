@@ -433,7 +433,7 @@ checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 [[package]]
 name = "contracts"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#4a65e63649e709261e09ac60c7a414816c1af654"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#23f16cd7ecad4e6e924d0fbc2214fbcbb97d80bf"
 dependencies = [
  "convert_case",
  "ethers",
@@ -2304,7 +2304,7 @@ checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 [[package]]
 name = "pools-graph"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#4a65e63649e709261e09ac60c7a414816c1af654"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#23f16cd7ecad4e6e924d0fbc2214fbcbb97d80bf"
 dependencies = [
  "contracts",
  "dashmap",
@@ -3654,7 +3654,7 @@ checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
 [[package]]
 name = "utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/quentinv72/arbitrage.git#4a65e63649e709261e09ac60c7a414816c1af654"
+source = "git+ssh://git@github.com/quentinv72/arbitrage.git#23f16cd7ecad4e6e924d0fbc2214fbcbb97d80bf"
 dependencies = [
  "either",
  "ethers",
