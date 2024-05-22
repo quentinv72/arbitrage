@@ -2,14 +2,11 @@ use std::cmp::max;
 use std::collections::HashSet;
 use std::ops::{Div, Mul};
 use std::sync::Arc;
-use std::time::Instant;
 
-use contracts::qv_executor::QVExecutorErrors;
 use ethers::prelude::{ContractError, Lazy};
 use ethers::providers::{Middleware, StreamExt};
 use ethers::types::{Address, U256, U64};
-use ethers::types::transaction::eip2718::TypedTransaction;
-use log::{error, info, warn};
+use log::{info};
 use pools_graph::pool_data::pool_data::{PoolData, PoolDataTrait};
 use pools_graph::pools_graph::PoolsGraph;
 use pools_graph::utils::arbitrage::Arbitrage;
@@ -21,7 +18,7 @@ use pools_graph::utils::uniswap_v2::{
 use rayon::prelude::*;
 use utils::logging::setup_logging;
 use utils::TOKEN_BLACKLIST;
-use utils::utils::{FlashbotsProvider, Setup, Utils};
+use utils::utils::{Setup, Utils};
 
 static V2_FACTORIES: [&Lazy<Factory>; 6] = [
     &UNISWAP_V2_FACTORY,
@@ -78,8 +75,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
         profitable_trades.sort();
-        while profitable_trades.len() > 0 {
-            let top_item = profitable_trades.pop().unwrap();
+        while let Some(top_item) = profitable_trades.pop() {
+            
             top_item
                 .submit_transaction_flashbots(
                     &graph,
@@ -107,11 +104,11 @@ fn get_all_paths(graph: &PoolsGraph) -> Vec<Path> {
             continue;
         }
         let weth_output_pools = graph
-            .get_pool_addresses(input_token.clone(), WETH.parse().unwrap())
+            .get_pool_addresses(*input_token, WETH.parse().unwrap())
             .unwrap()
             .value()
             .iter()
-            .map(|x| x.clone())
+            .map(|x| *x)
             .collect::<Vec<Address>>();
         let output_tokens = graph.get_neighbouring_tokens(&input_token.clone()).unwrap();
         for output_token in output_tokens.value().iter() {
@@ -119,15 +116,15 @@ fn get_all_paths(graph: &PoolsGraph) -> Vec<Path> {
                 continue;
             }
             let all_pools = graph
-                .get_pool_addresses(input_token.clone(), output_token.clone())
+                .get_pool_addresses(*input_token, *output_token)
                 .unwrap();
             for input_pool_address in all_pools.value().iter() {
                 for output_pool_address in all_pools.iter() {
                     if output_pool_address.0 != input_pool_address.0 {
                         results.push(Path {
-                            input_token: input_token.clone(),
-                            input_pool_address: input_pool_address.clone(),
-                            output_pool_address: output_pool_address.clone(),
+                            input_token: *input_token,
+                            input_pool_address: *input_pool_address,
+                            output_pool_address: *output_pool_address,
                             weth_output_pools: weth_output_pools.clone(),
                         })
                     }
@@ -162,7 +159,7 @@ async fn update_reserves<M: Middleware>(
         for pool_address in &path.weth_output_pools {
             uniswap_v2::refresh_reserves(
                 &pools_graph,
-                &pool_address,
+                pool_address,
                 current_block,
                 client.clone(),
             )
@@ -179,9 +176,9 @@ fn try_finding_arbitrage(graph: &PoolsGraph, path: &Path) -> Option<Arbitrage> {
         .get_tokens();
     let zero_for_one = input_token_0 == path.input_token;
     let (input_reserve_in, input_reserve_out) =
-        get_uniswap_v2_pair_reserves(&path.input_pool_address, &graph, zero_for_one);
+        get_uniswap_v2_pair_reserves(&path.input_pool_address, graph, zero_for_one);
     let (output_reserve_in, output_reserve_out) =
-        get_uniswap_v2_pair_reserves(&path.output_pool_address, &graph, !zero_for_one);
+        get_uniswap_v2_pair_reserves(&path.output_pool_address, graph, !zero_for_one);
     let max_amount_in = max_amount_in(
         input_reserve_in,
         input_reserve_out,
@@ -189,7 +186,7 @@ fn try_finding_arbitrage(graph: &PoolsGraph, path: &Path) -> Option<Arbitrage> {
         output_reserve_out,
     );
     if max_amount_in > U256::zero() {
-        return calculate_profit(&graph, &path, max_amount_in, zero_for_one);
+        return calculate_profit(graph, path, max_amount_in, zero_for_one);
     }
     None
 }
@@ -229,7 +226,7 @@ fn calculate_profit(
         let out = weth_pool.get_amount_out(profit, _zero_for_one_weth);
         if out > amount_out_third {
             amount_out_third = out;
-            output_address = weth_pool_address.clone();
+            output_address = *weth_pool_address;
             zero_for_one_weth = _zero_for_one_weth;
         }
     }

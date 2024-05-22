@@ -28,7 +28,7 @@ fn main() {
         let path = entry.path();
         if path.is_file() && path.extension().unwrap().to_str().unwrap() == "json" {
             let contract_name = extract_contract_name(path);
-            if seen.contains(&contract_name.to_string()) {
+            if seen.contains(contract_name) {
                 panic!("{contract_name} seems duplicated")
             }
             seen.insert(contract_name.to_string());
@@ -36,7 +36,7 @@ fn main() {
             let module_name = contract_name.to_case(Case::Snake);
             let binding_filename = format!("{}{}{}", "/Users/quentin/arbitrage/contracts/src/", module_name, rust_extension);
             Abigen::new(contract_name, abi).unwrap().generate().unwrap().write_to_file(binding_filename).unwrap();
-            lib.write(format!("pub mod {};\n", module_name).as_bytes()).unwrap();
+            lib.write_all(format!("pub mod {};\n", module_name).as_bytes()).unwrap();
         }
     }
 }

@@ -163,7 +163,7 @@ pub mod safe_erc20 {
         > {
             let factory = ::ethers::contract::ContractFactory::new(
                 SAFEERC20_ABI.clone(),
-                SAFEERC20_BYTECODE.clone().into(),
+                SAFEERC20_BYTECODE.clone(),
                 client,
             );
             let deployer = factory.deploy(constructor_args)?;

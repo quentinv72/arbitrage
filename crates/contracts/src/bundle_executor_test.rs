@@ -685,7 +685,7 @@ pub mod bundle_executor_test {
         > {
             let factory = ::ethers::contract::ContractFactory::new(
                 BUNDLEEXECUTORTEST_ABI.clone(),
-                BUNDLEEXECUTORTEST_BYTECODE.clone().into(),
+                BUNDLEEXECUTORTEST_BYTECODE.clone(),
                 client,
             );
             let deployer = factory.deploy(constructor_args)?;

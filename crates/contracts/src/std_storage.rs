@@ -106,7 +106,7 @@ pub mod std_storage {
         > {
             let factory = ::ethers::contract::ContractFactory::new(
                 STDSTORAGE_ABI.clone(),
-                STDSTORAGE_BYTECODE.clone().into(),
+                STDSTORAGE_BYTECODE.clone(),
                 client,
             );
             let deployer = factory.deploy(constructor_args)?;

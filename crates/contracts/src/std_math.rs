@@ -106,7 +106,7 @@ pub mod std_math {
         > {
             let factory = ::ethers::contract::ContractFactory::new(
                 STDMATH_ABI.clone(),
-                STDMATH_BYTECODE.clone().into(),
+                STDMATH_BYTECODE.clone(),
                 client,
             );
             let deployer = factory.deploy(constructor_args)?;

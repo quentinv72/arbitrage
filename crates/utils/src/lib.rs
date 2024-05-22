@@ -1,7 +1,5 @@
 use std::collections::HashSet;
 
-use ethers::middleware::Middleware;
-use ethers::signers::Signer;
 use ethers::types::Address;
 use once_cell::sync::Lazy;
 

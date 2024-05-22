@@ -1,38 +1,27 @@
 use std::cmp::max;
-use std::collections::{BinaryHeap, HashSet};
-use std::error::Error;
+use std::collections::{HashSet};
 use std::ops::{Div, Mul};
 use std::sync::Arc;
 
-use contracts::qv_executor::QVExecutorErrors;
-use ethers::abi::Hash;
-use ethers::contract::{ContractCall, EthError, Lazy};
-use ethers::core::k256::elliptic_curve::consts::U2;
+use ethers::contract::{Lazy};
 use ethers::middleware::Middleware;
-use ethers::prelude::{ContractError, SignerMiddleware};
-use ethers::prelude::transaction::eip2718::TypedTransaction;
+use ethers::prelude::{ContractError};
 use ethers::providers::StreamExt;
-use ethers::signers::Signer;
 use ethers::types::{Address, U256, U64};
-use ethers::utils::Units::Gwei;
-use ethers_flashbots::{BroadcasterMiddleware, BundleRequest, PendingBundleError};
-use log::{debug, error, info, warn};
+use log::{info};
 use pools_graph::pool_data::pool_data::{PoolData, PoolDataTrait};
-use pools_graph::pool_data::uniswap_v2::UniswapV2;
 use pools_graph::pools_graph::PoolsGraph;
 use pools_graph::utils::arbitrage::Arbitrage;
 use pools_graph::utils::uniswap_v2;
 use pools_graph::utils::uniswap_v2::{
-    CRO_DEFI_FACTORY, Factory, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY, SUSHISWAP_FACTORY,
-    UNISWAP_V2_FACTORY, ZEUS_FACTORY,
+    CRO_DEFI_FACTORY, Factory, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY, SUSHISWAP_FACTORY, ZEUS_FACTORY,
 };
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
-use tokio::task::JoinSet;
 use tokio::time::Instant;
 use utils::logging::setup_logging;
 use utils::TOKEN_BLACKLIST;
-use utils::utils::{FlashbotsProvider, Setup, Utils};
+use utils::utils::{Setup, Utils};
 
 static V2_FACTORIES: [&Lazy<Factory>; 5] = [
     // &UNISWAP_V2_FACTORY,
@@ -65,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     uniswap_v2::load_uniswap_v2_pairs(&graph, factories, Arc::clone(&rpc_client)).await?;
     let paths = get_paths_2(&graph, WETH.parse()?);
     info!("Found {} paths", paths.len());
-    let mut has_reverted: HashSet<Vec<Address>> = HashSet::new();
+    let has_reverted: HashSet<Vec<Address>> = HashSet::new();
     let ws_client = utils.get_ws_client();
     let mut stream = ws_client.subscribe_blocks().await?;
     while let Some(block) = stream.next().await {
@@ -86,8 +75,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .collect::<Vec<_>>();
 
         profitable_trades.sort();
-        while profitable_trades.len() > 0 {
-            let top_item = profitable_trades.pop().unwrap();
+        while let Some(top_item) = profitable_trades.pop() {
+            
             info!("{top_item:#?}");
             // top_item
             //     .submit_transaction_flashbots(
@@ -115,9 +104,9 @@ fn try_finding_arbitrage(
     let (input_token_0, _) = graph.get_pool_data(&input_address).unwrap().get_tokens();
     let zero_for_one = input_token_0 == WETH.parse().unwrap();
     let (input_reserve_in, input_reserve_out) =
-        get_uniswap_v2_pair_reserves(&input_address, &graph, zero_for_one);
+        get_uniswap_v2_pair_reserves(&input_address, graph, zero_for_one);
     let (output_reserve_in, output_reserve_out) =
-        get_uniswap_v2_pair_reserves(&output_address, &graph, !zero_for_one);
+        get_uniswap_v2_pair_reserves(&output_address, graph, !zero_for_one);
     let max_amount_in = max_amount_in(
         input_reserve_in,
         input_reserve_out,
@@ -126,7 +115,7 @@ fn try_finding_arbitrage(
     );
     if max_amount_in > U256::zero() {
         let (amount_in_first, amount_out_first, amount_out_second, profit) = calculate_profit(
-            &graph,
+            graph,
             &input_address,
             &output_address,
             max_amount_in,

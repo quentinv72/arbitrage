@@ -289,7 +289,7 @@ pub mod std_error {
         > {
             let factory = ::ethers::contract::ContractFactory::new(
                 STDERROR_ABI.clone(),
-                STDERROR_BYTECODE.clone().into(),
+                STDERROR_BYTECODE.clone(),
                 client,
             );
             let deployer = factory.deploy(constructor_args)?;

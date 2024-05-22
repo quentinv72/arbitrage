@@ -472,7 +472,7 @@ pub mod ds_test {
         > {
             let factory = ::ethers::contract::ContractFactory::new(
                 DSTEST_ABI.clone(),
-                DSTEST_BYTECODE.clone().into(),
+                DSTEST_BYTECODE.clone(),
                 client,
             );
             let deployer = factory.deploy(constructor_args)?;

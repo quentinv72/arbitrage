@@ -171,7 +171,7 @@ pub mod std_storage_safe {
         > {
             let factory = ::ethers::contract::ContractFactory::new(
                 STDSTORAGESAFE_ABI.clone(),
-                STDSTORAGESAFE_BYTECODE.clone().into(),
+                STDSTORAGESAFE_BYTECODE.clone(),
                 client,
             );
             let deployer = factory.deploy(constructor_args)?;

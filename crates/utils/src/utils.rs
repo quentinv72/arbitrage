@@ -13,7 +13,8 @@ use url::Url;
 use crate::utils::Env::{Production, Staging};
 
 pub type FlashbotsProvider =
-    SignerMiddleware<BroadcasterMiddleware<Provider<Http>, Wallet<SigningKey>>, Wallet<SigningKey>>;
+SignerMiddleware<BroadcasterMiddleware<Provider<Http>, Wallet<SigningKey>>, Wallet<SigningKey>>;
+
 static BUILDER_URLS: &[&str] = &[
     "https://rpc.beaverbuild.org",
     "https://relay.flashbots.net",
@@ -29,6 +30,7 @@ pub struct Utils<M: Middleware> {
 }
 
 pub trait Setup<M: Middleware> {
+    #[allow(async_fn_in_trait)]
     async fn setup() -> Utils<M>;
 }
 
@@ -56,7 +58,7 @@ impl Setup<FlashbotsProvider> for Utils<FlashbotsProvider> {
         let ws_client = Arc::new(Provider::<Ws>::connect(vars.ws_url.unwrap()).await.unwrap());
         Self {
             env: Env::get_env(),
-            ws_client: ws_client,
+            ws_client,
             rpc_client: client,
             bundle_executor: vars.bundle_executor_address.unwrap().parse().unwrap(),
         }

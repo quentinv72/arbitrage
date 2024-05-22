@@ -1,14 +1,13 @@
-use contracts::i_uniswap_v_2_pair::IUniswapV2Pair;
-use ethers::core::k256::elliptic_curve::consts::U25;
-use ethers::middleware::Middleware;
-use ethers::prelude::{Bytes, ContractError, U256};
-use ethers::types::{Address, U64};
-use log::warn;
-use std::any::Any;
 use std::ops::{Div, Mul};
 use std::sync::Arc;
 
-use crate::pool_data::pool_data::{PoolData, PoolDataTrait};
+use ethers::middleware::Middleware;
+use ethers::prelude::{Bytes, ContractError, U256};
+use ethers::types::{Address, U64};
+
+use contracts::i_uniswap_v_2_pair::IUniswapV2Pair;
+
+use crate::pool_data::pool_data::PoolDataTrait;
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct UniswapV2 {
