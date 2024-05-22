@@ -1,0 +1,19 @@
+[package]
+name = "pools-graph"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dashmap.workspace = true
+ethers.workspace = true
+log.workspace = true
+tokio.workspace = true
+contracts.workspace = true
+utils.workspace = true
+once_cell.workspace = true
+ethers-flashbots.workspace = true
+serde = { version = "1.0.198", features = ["derive"] }
+reqwest-graphql = "1.0.0"
+enum_dispatch = "0.3.13"

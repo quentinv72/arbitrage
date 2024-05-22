@@ -1,0 +1,16 @@
+[package]
+name = "uni-v2-3-weth-bot"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ethers.workspace = true
+log.workspace = true
+pools-graph.workspace = true
+contracts.workspace = true
+utils.workspace = true
+tokio.workspace = true
+rayon.workspace = true
+ethers-flashbots.workspace = true

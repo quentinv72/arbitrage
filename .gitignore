@@ -6,6 +6,7 @@
 cache/
 out/
 lib/
+target/
 
 # Ignores development broadcast logs
 !/broadcast
