@@ -20,3 +20,6 @@ enum_dispatch = "0.3.13"
 
 [dev-dependencies]
 criterion.workspace = true
+
+[lints.clippy]
+module_inception = "allow"

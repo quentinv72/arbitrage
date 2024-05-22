@@ -1,11 +1,11 @@
+use dashmap::{DashMap, DashSet};
 use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::try_result::TryResult;
-use dashmap::{DashMap, DashSet};
-use ethers::prelude::Middleware;
 use ethers::types::Address;
 
 use crate::pool_data::pool_data::{PoolData, PoolDataTrait};
 
+#[derive(Default)]
 pub struct PoolsGraph {
     _pool_address_to_pool_data: DashMap<Address, PoolData>,
     // ERC-20 token -> Set<ERC-20 token>
@@ -15,14 +15,6 @@ pub struct PoolsGraph {
 }
 
 impl PoolsGraph {
-    pub fn new() -> Self {
-        Self {
-            _pool_address_to_pool_data: DashMap::new(),
-            _weights: DashMap::new(),
-            _neighbouring_erc20_tokens: DashMap::new(),
-        }
-    }
-
     pub fn get_pool_data(&self, pool_address: &Address) -> Option<Ref<Address, PoolData>> {
         self._pool_address_to_pool_data.get(pool_address)
     }
@@ -73,7 +65,6 @@ impl PoolsGraph {
                 match self._weights.get(&(token_0, token_1)) {
                     Some(kv) => {
                         kv.value().insert(pool_address);
-                        ()
                     }
                     None => {
                         let weight_set = DashSet::new();
@@ -97,16 +88,16 @@ impl PoolsGraph {
 
 #[cfg(test)]
 mod tests {
-    use crate::pool_data::pool_data::PoolDataTrait;
     use ethers::types::U256;
 
+    use crate::pool_data::pool_data::PoolDataTrait;
     use crate::pool_data::uniswap_v2::UniswapV2;
     use crate::pool_data::uniswap_v3::UniswapV3;
     use crate::pools_graph::PoolsGraph;
 
     #[test]
     fn successfully_inserts_into_graph() {
-        let graph: PoolsGraph = PoolsGraph::new();
+        let graph: PoolsGraph = Default::default();
         let quoter_address = "0x1F98431c8aD98553881AE4a59f267346ea31F784";
         let token_a = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e"
             .parse()

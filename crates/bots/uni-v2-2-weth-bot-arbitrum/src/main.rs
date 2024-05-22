@@ -1,14 +1,16 @@
 use std::cmp::max;
-use std::collections::{HashSet};
 use std::ops::{Div, Mul};
 use std::sync::Arc;
 
-use ethers::contract::{Lazy};
+use ethers::contract::Lazy;
 use ethers::middleware::Middleware;
-use ethers::prelude::{ContractError};
+use ethers::prelude::ContractError;
 use ethers::providers::StreamExt;
 use ethers::types::{Address, U256, U64};
-use log::{info};
+use log::info;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
+
 use pools_graph::pool_data::pool_data::{PoolData, PoolDataTrait};
 use pools_graph::pools_graph::PoolsGraph;
 use pools_graph::utils::arbitrage::Arbitrage;
@@ -16,9 +18,6 @@ use pools_graph::utils::uniswap_v2;
 use pools_graph::utils::uniswap_v2::{
     CRO_DEFI_FACTORY, Factory, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY, SUSHISWAP_FACTORY, ZEUS_FACTORY,
 };
-use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::ParallelIterator;
-use tokio::time::Instant;
 use utils::logging::setup_logging;
 use utils::TOKEN_BLACKLIST;
 use utils::utils::{Setup, Utils};
@@ -39,7 +38,7 @@ const APP_NAME: &str = env!("CARGO_CRATE_NAME");
 
 const NUMBER_OF_STEPS: u32 = 1000;
 
-const PRIORITY_FEE_PERCENTAGE: u32 = 99_99;
+// const PRIORITY_FEE_PERCENTAGE: u32 = 99_99;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -50,15 +49,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .map(|x| Lazy::force(x))
         .collect::<Vec<_>>();
-    let graph = Arc::new(PoolsGraph::new());
+    let graph = Arc::new(Default::default());
     uniswap_v2::load_uniswap_v2_pairs(&graph, factories, Arc::clone(&rpc_client)).await?;
     let paths = get_paths_2(&graph, WETH.parse()?);
     info!("Found {} paths", paths.len());
-    let has_reverted: HashSet<Vec<Address>> = HashSet::new();
+    // let has_reverted: HashSet<Vec<Address>> = HashSet::new();
     let ws_client = utils.get_ws_client();
     let mut stream = ws_client.subscribe_blocks().await?;
     while let Some(block) = stream.next().await {
-        let start = Instant::now();
+        // let start = Instant::now();
         let block_number = block.number.unwrap();
         if block_number != rpc_client.get_block_number().await? {
             continue;
@@ -76,7 +75,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         profitable_trades.sort();
         while let Some(top_item) = profitable_trades.pop() {
-            
             info!("{top_item:#?}");
             // top_item
             //     .submit_transaction_flashbots(

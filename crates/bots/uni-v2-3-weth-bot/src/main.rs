@@ -6,7 +6,9 @@ use std::sync::Arc;
 use ethers::prelude::{ContractError, Lazy};
 use ethers::providers::{Middleware, StreamExt};
 use ethers::types::{Address, U256, U64};
-use log::{info};
+use log::info;
+use rayon::prelude::*;
+
 use pools_graph::pool_data::pool_data::{PoolData, PoolDataTrait};
 use pools_graph::pools_graph::PoolsGraph;
 use pools_graph::utils::arbitrage::Arbitrage;
@@ -15,7 +17,6 @@ use pools_graph::utils::uniswap_v2::{
     CRO_DEFI_FACTORY, Factory, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY, SUSHISWAP_FACTORY,
     UNISWAP_V2_FACTORY, ZEUS_FACTORY,
 };
-use rayon::prelude::*;
 use utils::logging::setup_logging;
 use utils::TOKEN_BLACKLIST;
 use utils::utils::{Setup, Utils};
@@ -46,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .map(|x| Lazy::force(x))
         .collect::<Vec<_>>();
-    let graph = Arc::new(PoolsGraph::new());
+    let graph = Arc::new(Default::default());
     uniswap_v2::load_uniswap_v2_pairs(&graph, factories, Arc::clone(&rpc_client)).await?;
     let all_paths = get_all_paths(&graph);
     let mut has_reverted: HashSet<Vec<Address>> = HashSet::new();
@@ -66,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Arc::clone(&graph),
             Arc::clone(&rpc_client),
         )
-        .await?;
+            .await?;
 
         let mut profitable_trades = all_paths
             .par_iter()
@@ -76,7 +77,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .collect::<Vec<_>>();
         profitable_trades.sort();
         while let Some(top_item) = profitable_trades.pop() {
-            
             top_item
                 .submit_transaction_flashbots(
                     &graph,
@@ -148,14 +148,14 @@ async fn update_reserves<M: Middleware>(
             current_block,
             client.clone(),
         )
-        .await?;
+            .await?;
         uniswap_v2::refresh_reserves(
             &pools_graph,
             &path.output_pool_address,
             current_block,
             client.clone(),
         )
-        .await?;
+            .await?;
         for pool_address in &path.weth_output_pools {
             uniswap_v2::refresh_reserves(
                 &pools_graph,
@@ -163,7 +163,7 @@ async fn update_reserves<M: Middleware>(
                 current_block,
                 client.clone(),
             )
-            .await?;
+                .await?;
         }
     }
     Ok(())

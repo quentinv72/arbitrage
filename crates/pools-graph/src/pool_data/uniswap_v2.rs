@@ -63,6 +63,7 @@ impl UniswapV2 {
     }
 
     // this is only used by the pools graph test
+    #[cfg(test)]
     pub(crate) fn new(
         pair_address: Address,
         token_0: Address,
@@ -89,7 +90,7 @@ impl UniswapV2 {
         swap_fee: U256,
     ) -> U256 {
         let calc_fee = U256::from(1_000) - swap_fee;
-        let amount_in_with_fee = amount_in.mul(U256::from(calc_fee));
+        let amount_in_with_fee = amount_in.mul(calc_fee);
         let numerator = amount_in_with_fee.mul(reserve_out);
         let denominator = (reserve_in.mul(U256::from(1_000))) + (amount_in_with_fee);
         if denominator.is_zero() {

@@ -1,18 +1,17 @@
-use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::pool_data::pool_data::{PoolData, PoolDataTrait};
-use contracts::i_uniswap_v_2_factory::IUniswapV2Factory;
-use dashmap::mapref::one::RefMut;
 use dashmap::try_result::TryResult;
 use ethers::contract::ContractError;
 use ethers::prelude::U64;
 use ethers::providers::Middleware;
-use ethers::types::{Address, H160, U256};
-use log::{debug, error, info, warn};
+use ethers::types::{Address, U256};
+use log::{error, info, warn};
 use once_cell::sync::Lazy;
 
+use contracts::i_uniswap_v_2_factory::IUniswapV2Factory;
+
+use crate::pool_data::pool_data::PoolData;
 use crate::pool_data::uniswap_v2::UniswapV2;
 use crate::pools_graph::PoolsGraph;
 
@@ -86,7 +85,6 @@ pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
             match task.await.unwrap() {
                 Ok(pool_data) => {
                     pools_graph.insert(PoolData::UniswapV2(pool_data));
-                    ()
                 }
                 Err(e) => error!("Failed fetch reserve {e}"),
             }

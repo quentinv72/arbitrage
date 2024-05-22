@@ -1,13 +1,13 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::pool_data::pool_data::PoolData;
 use ethers::middleware::Middleware;
 use ethers::types::Address;
 use log::{error, info};
 use reqwest_graphql::Client;
 use serde::{Deserialize, Serialize};
 
+use crate::pool_data::pool_data::PoolData;
 use crate::pool_data::uniswap_v3::UniswapV3;
 use crate::pools_graph::PoolsGraph;
 
@@ -27,15 +27,14 @@ pub async fn load_uniswap_v3_pools<M: Middleware + 'static>(
         let pool_count = get_total_v3_pools(&factory.subgraph_url).await.unwrap();
         info!("Factory {} has {pool_count} pools", factory.factory_address);
         let mut id_gt = String::from("");
-        let mut skip = 0;
         loop {
-            let vars = Vars { first: 1000, id_gt };
+            let vars = Vars { first: 1000, id_gt: id_gt.clone() };
             let pools = get_pools(&factory.subgraph_url, vars).await?;
-            if pools.len() == 0 {
+            if pools.is_empty() {
                 break;
             }
             let mut tasks = Vec::with_capacity(pools.len());
-            id_gt = pools.last().unwrap().id.clone();
+            id_gt.clone_from(&pools.last().unwrap().id);
             for pool in pools {
                 let client_clone = Arc::clone(&client);
                 tasks.push(tokio::spawn(async move {
@@ -47,7 +46,7 @@ pub async fn load_uniswap_v3_pools<M: Middleware + 'static>(
                         pool.fee_tier.parse().unwrap(),
                         client_clone,
                     )
-                    .await
+                        .await
                 }))
             }
             for task in tasks {
@@ -56,7 +55,6 @@ pub async fn load_uniswap_v3_pools<M: Middleware + 'static>(
                     Err(e) => error!("Failure to load pool data into map {e}"),
                 }
             }
-            skip += 1000;
         }
     }
     let elapsed = start.elapsed();
@@ -75,7 +73,7 @@ async fn get_total_v3_pools(url: &str) -> Result<u32, Box<dyn std::error::Error>
         "#;
     match client.query::<FactoriesData>(query).await {
         Ok(factory_data) => {
-            let pool_count_str = &factory_data.factories.get(0).unwrap().pool_count;
+            let pool_count_str = &factory_data.factories.first().unwrap().pool_count;
             let pool_count = pool_count_str.parse::<u32>()?;
             Ok(pool_count)
         }

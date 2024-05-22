@@ -3,18 +3,19 @@ use std::collections::HashSet;
 use std::ops::{Div, Mul};
 use std::sync::Arc;
 
-use crate::pool_data::pool_data::PoolDataTrait;
-use contracts::qv_executor::QVExecutor;
 use ethers::abi::{encode, Token};
 use ethers::contract::ContractCall;
 use ethers::prelude::*;
 use ethers::providers::Middleware;
-use ethers::types::transaction::eip2718::TypedTransaction;
 use ethers::types::{Address, Bytes, U256, U64};
+use ethers::types::transaction::eip2718::TypedTransaction;
 use ethers_flashbots::*;
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
+
+use contracts::qv_executor::QVExecutor;
 use utils::utils::FlashbotsProvider;
 
+use crate::pool_data::pool_data::PoolDataTrait;
 use crate::pools_graph::PoolsGraph;
 
 #[derive(Eq, Debug)]
@@ -85,7 +86,7 @@ impl Arbitrage {
         bundle_executor_address: Address,
     ) -> ContractCall<M, ()> {
         let mut next_call = Self::build_data(
-            self.amounts_in.last().unwrap().clone(),
+            *self.amounts_in.last().unwrap(),
             Address::zero(),
             Bytes::from(Vec::new()),
         );
@@ -101,7 +102,7 @@ impl Arbitrage {
                 bundle_executor_address,
             );
             next_call =
-                Self::build_data(self.amounts_in[i - 1].clone(), self.targets[i], swap_data);
+                Self::build_data(self.amounts_in[i - 1], self.targets[i], swap_data);
         }
 
         let start_pool_addr = self.targets[0];
@@ -123,6 +124,7 @@ impl Arbitrage {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn submit_transaction_flashbots(
         &self,
         graph: &PoolsGraph,
@@ -134,8 +136,8 @@ impl Arbitrage {
         priority_fee_percentage: u32,
         block_number: U64,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut cc = self.build_transaction(
-            &graph,
+        let cc = self.build_transaction(
+            graph,
             output_token,
             Arc::clone(&client),
             bundle_executor_address,
@@ -178,7 +180,7 @@ impl Arbitrage {
                     priority_fee_percentage,
                     block_number,
                 )
-                .await
+                    .await
                 {
                     Ok(_) => (),
                     Err(e) => {
@@ -243,10 +245,10 @@ impl Arbitrage {
                         Err(e) => error!("An error occured: {}", e),
                     }
                 }
-                return Ok(());
+                Ok(())
             }
             _other => panic!("Uggh this should be EIP1559"),
-        };
+        }
     }
 
     fn build_data(amount_in: U256, target_address: Address, swap_data: Bytes) -> Bytes {
