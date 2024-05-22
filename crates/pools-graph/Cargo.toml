@@ -17,3 +17,6 @@ ethers-flashbots.workspace = true
 serde = { version = "1.0.198", features = ["derive"] }
 reqwest-graphql = "1.0.0"
 enum_dispatch = "0.3.13"
+
+[dev-dependencies]
+criterion.workspace = true
