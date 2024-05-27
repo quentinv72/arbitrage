@@ -113,12 +113,7 @@ impl PoolDataTrait for UniswapV2 {
         self.block_last_updated
     }
 
-    async fn get_amount_out<M: Middleware>(
-        &self,
-        amount_in: U256,
-        zero_for_one: bool,
-        _client: Option<Arc<M>>,
-    ) -> Result<U256, ContractError<M>> {
+    fn get_amount_out(&self, amount_in: U256, zero_for_one: bool) -> U256 {
         let reserve_in = if zero_for_one {
             self.reserve_0
         } else {
@@ -129,12 +124,12 @@ impl PoolDataTrait for UniswapV2 {
         } else {
             self.reserve_0
         };
-        Ok(Self::get_amount_out(
+        Self::get_amount_out(
             amount_in,
             U256::from(reserve_in),
             U256::from(reserve_out),
             self.swap_fee,
-        ))
+        )
     }
 
     fn build_swap_calldata<M: Middleware>(
@@ -223,19 +218,13 @@ mod tests {
         assert_eq!(pool_data.swap_fee, swap_fee)
     }
 
-    #[tokio::test]
-    async fn get_amount_out() {
+    #[test]
+    fn get_amount_out() {
         let pool = create_pool_data();
-        let amount_out = pool
-            .get_amount_out::<Provider<Http>>(U256::from(10), true, None)
-            .await
-            .unwrap();
+        let amount_out = pool.get_amount_out(U256::from(10), true);
         assert_eq!(amount_out, U256::from(987158));
 
-        let amount_out = pool
-            .get_amount_out::<Provider<Http>>(U256::from(10), false, None)
-            .await
-            .unwrap();
+        let amount_out = pool.get_amount_out(U256::from(10), false);
         assert_eq!(amount_out, U256::zero())
     }
 }

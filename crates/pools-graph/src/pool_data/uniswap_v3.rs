@@ -60,8 +60,6 @@ impl UniswapV3 {
             block_last_updates: U64::zero(),
         })
     }
-
-    // fn get_amount_out
 }
 
 impl PoolDataTrait for UniswapV3 {
@@ -77,12 +75,7 @@ impl PoolDataTrait for UniswapV3 {
         self.block_last_updates
     }
 
-    async fn get_amount_out<M: Middleware>(
-        &self,
-        _amount_in: U256,
-        _zero_for_one: bool,
-        _client: Option<Arc<M>>,
-    ) -> Result<U256, ContractError<M>> {
+    fn get_amount_out(&self, _amount_in: U256, _zero_for_one: bool) -> U256 {
         todo!("V3 amount out not implemented")
     }
 
@@ -96,5 +89,48 @@ impl PoolDataTrait for UniswapV3 {
         _bundle_executor_address: Address,
     ) -> Bytes {
         todo!("V3 swap calldata not implemented")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use ethers::prelude::{Http, Provider};
+    use ethers::types::{Address, U64};
+
+    use contracts::i_uniswap_v_3_pool::IUniswapV3Pool;
+
+    use crate::pool_data::uniswap_v3::UniswapV3;
+
+    fn get_client() -> Provider<Http> {
+        Provider::<Http>::try_from(
+            "https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg",
+        )
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn new_from_client() {
+        let pool_address: Address = "0xE7361b7375Cb8e794A97788Ef63E95Fc03221320"
+            .parse()
+            .unwrap();
+        let client = Arc::new(get_client());
+        let pool_contract = IUniswapV3Pool::new(pool_address, client.clone());
+        let quoter = Address::random();
+        let token_0 = Address::random();
+        let token_1 = Address::random();
+        let fee_tier = 5;
+        let (sqrt_price_x_96, _, _, _, _, _, _) = pool_contract.slot_0().await.unwrap();
+        let pool_data =
+            UniswapV3::new_from_client(pool_address, quoter, token_0, token_1, fee_tier, client)
+                .await
+                .unwrap();
+        assert_eq!(pool_data.pool_address, pool_address);
+        assert_eq!(pool_data.token_0, token_0);
+        assert_eq!(pool_data.token_1, token_1);
+        assert_eq!(pool_data.fee_tier, fee_tier);
+        assert_eq!(pool_data.sqrt_price_x_96, sqrt_price_x_96);
+        assert_eq!(pool_data.block_last_updates, U64::zero());
     }
 }
