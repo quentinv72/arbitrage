@@ -60,6 +60,8 @@ impl UniswapV3 {
             block_last_updates: U64::zero(),
         })
     }
+
+    // fn get_amount_out
 }
 
 impl PoolDataTrait for UniswapV3 {
@@ -75,7 +77,12 @@ impl PoolDataTrait for UniswapV3 {
         self.block_last_updates
     }
 
-    fn get_amount_out(&self, _amount_in: U256, _zero_for_one: bool) -> U256 {
+    async fn get_amount_out<M: Middleware>(
+        &self,
+        _amount_in: U256,
+        _zero_for_one: bool,
+        _client: Option<Arc<M>>,
+    ) -> Result<U256, ContractError<M>> {
         todo!("V3 amount out not implemented")
     }
 

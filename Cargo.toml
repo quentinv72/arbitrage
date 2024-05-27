@@ -5,7 +5,6 @@ members = [
     "crates/pools-graph",
     "crates/bots/uni-v2-3-weth-bot",
     "crates/bots/uni-v2-2-weth-bot",
-    "crates/bots/uni-v2-2-weth-bot-arbitrum",
     "crates/utils"
 ]
 

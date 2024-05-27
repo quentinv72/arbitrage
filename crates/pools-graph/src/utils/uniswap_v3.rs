@@ -28,7 +28,10 @@ pub async fn load_uniswap_v3_pools<M: Middleware + 'static>(
         info!("Factory {} has {pool_count} pools", factory.factory_address);
         let mut id_gt = String::from("");
         loop {
-            let vars = Vars { first: 1000, id_gt: id_gt.clone() };
+            let vars = Vars {
+                first: 1000,
+                id_gt: id_gt.clone(),
+            };
             let pools = get_pools(&factory.subgraph_url, vars).await?;
             if pools.is_empty() {
                 break;
@@ -46,7 +49,7 @@ pub async fn load_uniswap_v3_pools<M: Middleware + 'static>(
                         pool.fee_tier.parse().unwrap(),
                         client_clone,
                     )
-                        .await
+                    .await
                 }))
             }
             for task in tasks {

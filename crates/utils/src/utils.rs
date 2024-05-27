@@ -13,7 +13,7 @@ use url::Url;
 use crate::utils::Env::{Production, Staging};
 
 pub type FlashbotsProvider =
-SignerMiddleware<BroadcasterMiddleware<Provider<Http>, Wallet<SigningKey>>, Wallet<SigningKey>>;
+    SignerMiddleware<BroadcasterMiddleware<Provider<Http>, Wallet<SigningKey>>, Wallet<SigningKey>>;
 
 static BUILDER_URLS: &[&str] = &[
     "https://rpc.beaverbuild.org",

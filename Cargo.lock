@@ -3709,21 +3709,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "uni-v2-2-weth-bot-arbitrum"
-version = "0.1.0"
-dependencies = [
- "contracts",
- "criterion",
- "ethers",
- "ethers-flashbots",
- "log",
- "pools-graph",
- "rayon",
- "tokio",
- "utils",
-]
-
-[[package]]
 name = "uni-v2-3-weth-bot"
 version = "0.1.0"
 dependencies = [

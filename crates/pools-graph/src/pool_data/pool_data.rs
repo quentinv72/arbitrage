@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use enum_dispatch::enum_dispatch;
+use ethers::prelude::ContractError;
 use ethers::providers::Middleware;
 use ethers::types::{Address, Bytes, U256, U64};
 
@@ -18,7 +19,13 @@ pub trait PoolDataTrait {
     fn get_tokens(&self) -> (Address, Address);
     fn get_pool_address(&self) -> Address;
     fn get_last_block_update(&self) -> U64;
-    fn get_amount_out(&self, amount_in: U256, zero_for_one: bool) -> U256;
+    #[allow(async_fn_in_trait)]
+    async fn get_amount_out<M: Middleware>(
+        &self,
+        amount_in: U256,
+        zero_for_one: bool,
+        client: Option<Arc<M>>,
+    ) -> Result<U256, ContractError<M>>;
     fn build_swap_calldata<M: Middleware>(
         &self,
         amount_in: U256,

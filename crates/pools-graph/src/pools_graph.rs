@@ -1,6 +1,6 @@
-use dashmap::{DashMap, DashSet};
 use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::try_result::TryResult;
+use dashmap::{DashMap, DashSet};
 use ethers::types::Address;
 
 use crate::pool_data::pool_data::{PoolData, PoolDataTrait};

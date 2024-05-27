@@ -7,7 +7,7 @@ pub use std_math::*;
     clippy::upper_case_acronyms,
     clippy::type_complexity,
     dead_code,
-    non_camel_case_types,
+    non_camel_case_types
 )]
 pub mod std_math {
     #[allow(deprecated)]
@@ -22,21 +22,18 @@ pub mod std_math {
         }
     }
     ///The parsed JSON ABI of the contract.
-    pub static STDMATH_ABI: ::ethers::contract::Lazy<::ethers::core::abi::Abi> = ::ethers::contract::Lazy::new(
-        __abi,
-    );
+    pub static STDMATH_ABI: ::ethers::contract::Lazy<::ethers::core::abi::Abi> =
+        ::ethers::contract::Lazy::new(__abi);
     #[rustfmt::skip]
     const __BYTECODE: &[u8] = b"`V`7`\x0B\x82\x82\x829\x80Q`\0\x1A`s\x14`*WcNH{q`\xE0\x1B`\0R`\0`\x04R`$`\0\xFD[0`\0R`s\x81S\x82\x81\xF3\xFEs\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x000\x14`\x80`@R`\0\x80\xFD\xFE\xA2dipfsX\"\x12 \x18\xAEO\xF5E\xED\xE3i\x9BO\xE7\xAE\xA4+\x06\xEC\x81m\xCA\xE1\xD5\xB5\xF9\xB1\xD9]G\xEC\x94g>edsolcC\0\x08\x19\x003";
     /// The bytecode of the contract.
-    pub static STDMATH_BYTECODE: ::ethers::core::types::Bytes = ::ethers::core::types::Bytes::from_static(
-        __BYTECODE,
-    );
+    pub static STDMATH_BYTECODE: ::ethers::core::types::Bytes =
+        ::ethers::core::types::Bytes::from_static(__BYTECODE);
     #[rustfmt::skip]
     const __DEPLOYED_BYTECODE: &[u8] = b"s\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x000\x14`\x80`@R`\0\x80\xFD\xFE\xA2dipfsX\"\x12 \x18\xAEO\xF5E\xED\xE3i\x9BO\xE7\xAE\xA4+\x06\xEC\x81m\xCA\xE1\xD5\xB5\xF9\xB1\xD9]G\xEC\x94g>edsolcC\0\x08\x19\x003";
     /// The deployed bytecode of the contract.
-    pub static STDMATH_DEPLOYED_BYTECODE: ::ethers::core::types::Bytes = ::ethers::core::types::Bytes::from_static(
-        __DEPLOYED_BYTECODE,
-    );
+    pub static STDMATH_DEPLOYED_BYTECODE: ::ethers::core::types::Bytes =
+        ::ethers::core::types::Bytes::from_static(__DEPLOYED_BYTECODE);
     pub struct stdMath<M>(::ethers::contract::Contract<M>);
     impl<M> ::core::clone::Clone for stdMath<M> {
         fn clone(&self) -> Self {
@@ -56,7 +53,9 @@ pub mod std_math {
     }
     impl<M> ::core::fmt::Debug for stdMath<M> {
         fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-            f.debug_tuple(::core::stringify!(stdMath)).field(&self.address()).finish()
+            f.debug_tuple(::core::stringify!(stdMath))
+                .field(&self.address())
+                .finish()
         }
     }
     impl<M: ::ethers::providers::Middleware> stdMath<M> {
@@ -66,13 +65,11 @@ pub mod std_math {
             address: T,
             client: ::std::sync::Arc<M>,
         ) -> Self {
-            Self(
-                ::ethers::contract::Contract::new(
-                    address.into(),
-                    STDMATH_ABI.clone(),
-                    client,
-                ),
-            )
+            Self(::ethers::contract::Contract::new(
+                address.into(),
+                STDMATH_ABI.clone(),
+                client,
+            ))
         }
         /// Constructs the general purpose `Deployer` instance based on the provided constructor arguments and sends it.
         /// Returns a new instance of a deployer that returns an instance of this contract after sending the transaction
@@ -114,8 +111,7 @@ pub mod std_math {
             Ok(deployer)
         }
     }
-    impl<M: ::ethers::providers::Middleware> From<::ethers::contract::Contract<M>>
-    for stdMath<M> {
+    impl<M: ::ethers::providers::Middleware> From<::ethers::contract::Contract<M>> for stdMath<M> {
         fn from(contract: ::ethers::contract::Contract<M>) -> Self {
             Self::new(contract.address(), contract.client())
         }

@@ -21,7 +21,6 @@ fn main() {
 
     let mut seen: HashSet<String> = HashSet::new();
 
-
     // Iterate over all entries in the directory
     for entry in WalkDir::new(dir_path) {
         let entry = entry.unwrap();
@@ -34,13 +33,21 @@ fn main() {
             seen.insert(contract_name.to_string());
             let abi = fs::read_to_string(path).unwrap();
             let module_name = contract_name.to_case(Case::Snake);
-            let binding_filename = format!("{}{}{}", "/Users/quentin/arbitrage/contracts/src/", module_name, rust_extension);
-            Abigen::new(contract_name, abi).unwrap().generate().unwrap().write_to_file(binding_filename).unwrap();
-            lib.write_all(format!("pub mod {};\n", module_name).as_bytes()).unwrap();
+            let binding_filename = format!(
+                "{}{}{}",
+                "/Users/quentin/arbitrage/contracts/src/", module_name, rust_extension
+            );
+            Abigen::new(contract_name, abi)
+                .unwrap()
+                .generate()
+                .unwrap()
+                .write_to_file(binding_filename)
+                .unwrap();
+            lib.write_all(format!("pub mod {};\n", module_name).as_bytes())
+                .unwrap();
         }
     }
 }
-
 
 fn extract_contract_name(path: &Path) -> &str {
     let json_len = ".json".len();

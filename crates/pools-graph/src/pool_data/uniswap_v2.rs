@@ -113,7 +113,12 @@ impl PoolDataTrait for UniswapV2 {
         self.block_last_updated
     }
 
-    fn get_amount_out(&self, amount_in: U256, zero_for_one: bool) -> U256 {
+    async fn get_amount_out<M: Middleware>(
+        &self,
+        amount_in: U256,
+        zero_for_one: bool,
+        _client: Option<Arc<M>>,
+    ) -> Result<U256, ContractError<M>> {
         let reserve_in = if zero_for_one {
             self.reserve_0
         } else {
@@ -124,12 +129,12 @@ impl PoolDataTrait for UniswapV2 {
         } else {
             self.reserve_0
         };
-        Self::get_amount_out(
+        Ok(Self::get_amount_out(
             amount_in,
             U256::from(reserve_in),
             U256::from(reserve_out),
             self.swap_fee,
-        )
+        ))
     }
 
     fn build_swap_calldata<M: Middleware>(
@@ -153,5 +158,84 @@ impl PoolDataTrait for UniswapV2 {
                 .calldata()
                 .unwrap()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use ethers::providers::{Http, Provider};
+    use ethers::types::{Address, U256, U64};
+
+    use contracts::i_uniswap_v_2_pair::IUniswapV2Pair;
+
+    use crate::pool_data::pool_data::PoolDataTrait;
+    use crate::pool_data::uniswap_v2::UniswapV2;
+
+    fn get_client() -> Provider<Http> {
+        Provider::<Http>::try_from(
+            "https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg",
+        )
+        .unwrap()
+    }
+
+    fn create_pool_data() -> UniswapV2 {
+        UniswapV2 {
+            pair_address: Address::zero(),
+            token_0: Address::random(),
+            token_1: Address::random(),
+            reserve_0: 1000,
+            reserve_1: 100000000,
+            block_last_updated: U64::one(),
+            swap_fee: U256::from(3),
+        }
+    }
+
+    #[test]
+    fn reserves() {
+        let pool_data = create_pool_data();
+        assert_eq!(
+            pool_data.get_reserves(),
+            (pool_data.reserve_0, pool_data.reserve_1)
+        )
+    }
+
+    #[tokio::test]
+    async fn new_from_client() {
+        let pair_address: Address = "0x9e02c5ce0bE2029c7a5cD86A37FF463Ff260af51"
+            .parse()
+            .unwrap();
+        let client = Arc::new(get_client());
+        let pair_contract = IUniswapV2Pair::new(pair_address, client.clone());
+        let token_0 = pair_contract.token_0().await.unwrap();
+        let token_1 = pair_contract.token_1().await.unwrap();
+        let (reserve_0, reserve_1, _) = pair_contract.get_reserves().await.unwrap();
+        let swap_fee = U256::zero();
+        let pool_data = UniswapV2::new_from_client(pair_address, swap_fee, client)
+            .await
+            .unwrap();
+        assert_eq!(pool_data.token_0, token_0);
+        assert_eq!(pool_data.token_1, token_1);
+        assert_eq!(pool_data.reserve_0, reserve_0);
+        assert_eq!(pool_data.reserve_1, reserve_1);
+        assert_eq!(pool_data.block_last_updated, U64::zero());
+        assert_eq!(pool_data.swap_fee, swap_fee)
+    }
+
+    #[tokio::test]
+    async fn get_amount_out() {
+        let pool = create_pool_data();
+        let amount_out = pool
+            .get_amount_out::<Provider<Http>>(U256::from(10), true, None)
+            .await
+            .unwrap();
+        assert_eq!(amount_out, U256::from(987158));
+
+        let amount_out = pool
+            .get_amount_out::<Provider<Http>>(U256::from(10), false, None)
+            .await
+            .unwrap();
+        assert_eq!(amount_out, U256::zero())
     }
 }

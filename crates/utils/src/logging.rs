@@ -1,8 +1,8 @@
+use log::LevelFilter;
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Logger, Root};
-use log4rs::Config;
 use log4rs::encode::json::JsonEncoder;
-use log::LevelFilter;
+use log4rs::Config;
 
 pub fn setup_logging(is_production: bool, app_name: &str) {
     let dev_stdout = ConsoleAppender::builder().build();

@@ -17,12 +17,12 @@ use pools_graph::pools_graph::PoolsGraph;
 use pools_graph::utils::arbitrage::Arbitrage;
 use pools_graph::utils::uniswap_v2;
 use pools_graph::utils::uniswap_v2::{
-    CRO_DEFI_FACTORY, Factory, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY, SUSHISWAP_FACTORY,
+    Factory, CRO_DEFI_FACTORY, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY, SUSHISWAP_FACTORY,
     UNISWAP_V2_FACTORY, ZEUS_FACTORY,
 };
 use utils::logging::setup_logging;
-use utils::TOKEN_BLACKLIST;
 use utils::utils::{Setup, Utils};
+use utils::TOKEN_BLACKLIST;
 
 static V2_FACTORIES: [&Lazy<Factory>; 6] = [
     &UNISWAP_V2_FACTORY,

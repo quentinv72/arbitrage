@@ -7,7 +7,7 @@ pub use std_storage::*;
     clippy::upper_case_acronyms,
     clippy::type_complexity,
     dead_code,
-    non_camel_case_types,
+    non_camel_case_types
 )]
 pub mod std_storage {
     #[allow(deprecated)]
@@ -22,21 +22,18 @@ pub mod std_storage {
         }
     }
     ///The parsed JSON ABI of the contract.
-    pub static STDSTORAGE_ABI: ::ethers::contract::Lazy<::ethers::core::abi::Abi> = ::ethers::contract::Lazy::new(
-        __abi,
-    );
+    pub static STDSTORAGE_ABI: ::ethers::contract::Lazy<::ethers::core::abi::Abi> =
+        ::ethers::contract::Lazy::new(__abi);
     #[rustfmt::skip]
     const __BYTECODE: &[u8] = b"`V`7`\x0B\x82\x82\x829\x80Q`\0\x1A`s\x14`*WcNH{q`\xE0\x1B`\0R`\0`\x04R`$`\0\xFD[0`\0R`s\x81S\x82\x81\xF3\xFEs\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x000\x14`\x80`@R`\0\x80\xFD\xFE\xA2dipfsX\"\x12 \x9BAH\xAD];m\xF39\xDE5\xAFZ\xE9~\x14\xB8\x0B}\xD5u\x0C\xA4j\xF5\xD8\xC5\xD5\xB9o\xE6\xA5dsolcC\0\x08\x19\x003";
     /// The bytecode of the contract.
-    pub static STDSTORAGE_BYTECODE: ::ethers::core::types::Bytes = ::ethers::core::types::Bytes::from_static(
-        __BYTECODE,
-    );
+    pub static STDSTORAGE_BYTECODE: ::ethers::core::types::Bytes =
+        ::ethers::core::types::Bytes::from_static(__BYTECODE);
     #[rustfmt::skip]
     const __DEPLOYED_BYTECODE: &[u8] = b"s\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x000\x14`\x80`@R`\0\x80\xFD\xFE\xA2dipfsX\"\x12 \x9BAH\xAD];m\xF39\xDE5\xAFZ\xE9~\x14\xB8\x0B}\xD5u\x0C\xA4j\xF5\xD8\xC5\xD5\xB9o\xE6\xA5dsolcC\0\x08\x19\x003";
     /// The deployed bytecode of the contract.
-    pub static STDSTORAGE_DEPLOYED_BYTECODE: ::ethers::core::types::Bytes = ::ethers::core::types::Bytes::from_static(
-        __DEPLOYED_BYTECODE,
-    );
+    pub static STDSTORAGE_DEPLOYED_BYTECODE: ::ethers::core::types::Bytes =
+        ::ethers::core::types::Bytes::from_static(__DEPLOYED_BYTECODE);
     pub struct stdStorage<M>(::ethers::contract::Contract<M>);
     impl<M> ::core::clone::Clone for stdStorage<M> {
         fn clone(&self) -> Self {
@@ -56,7 +53,9 @@ pub mod std_storage {
     }
     impl<M> ::core::fmt::Debug for stdStorage<M> {
         fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-            f.debug_tuple(::core::stringify!(stdStorage)).field(&self.address()).finish()
+            f.debug_tuple(::core::stringify!(stdStorage))
+                .field(&self.address())
+                .finish()
         }
     }
     impl<M: ::ethers::providers::Middleware> stdStorage<M> {
@@ -66,13 +65,11 @@ pub mod std_storage {
             address: T,
             client: ::std::sync::Arc<M>,
         ) -> Self {
-            Self(
-                ::ethers::contract::Contract::new(
-                    address.into(),
-                    STDSTORAGE_ABI.clone(),
-                    client,
-                ),
-            )
+            Self(::ethers::contract::Contract::new(
+                address.into(),
+                STDSTORAGE_ABI.clone(),
+                client,
+            ))
         }
         /// Constructs the general purpose `Deployer` instance based on the provided constructor arguments and sends it.
         /// Returns a new instance of a deployer that returns an instance of this contract after sending the transaction
@@ -114,8 +111,7 @@ pub mod std_storage {
             Ok(deployer)
         }
     }
-    impl<M: ::ethers::providers::Middleware> From<::ethers::contract::Contract<M>>
-    for stdStorage<M> {
+    impl<M: ::ethers::providers::Middleware> From<::ethers::contract::Contract<M>> for stdStorage<M> {
         fn from(contract: ::ethers::contract::Contract<M>) -> Self {
             Self::new(contract.address(), contract.client())
         }

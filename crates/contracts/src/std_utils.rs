@@ -7,7 +7,7 @@ pub use std_utils::*;
     clippy::upper_case_acronyms,
     clippy::type_complexity,
     dead_code,
-    non_camel_case_types,
+    non_camel_case_types
 )]
 pub mod std_utils {
     #[allow(deprecated)]
@@ -22,9 +22,8 @@ pub mod std_utils {
         }
     }
     ///The parsed JSON ABI of the contract.
-    pub static STDUTILS_ABI: ::ethers::contract::Lazy<::ethers::core::abi::Abi> = ::ethers::contract::Lazy::new(
-        __abi,
-    );
+    pub static STDUTILS_ABI: ::ethers::contract::Lazy<::ethers::core::abi::Abi> =
+        ::ethers::contract::Lazy::new(__abi);
     pub struct StdUtils<M>(::ethers::contract::Contract<M>);
     impl<M> ::core::clone::Clone for StdUtils<M> {
         fn clone(&self) -> Self {
@@ -44,7 +43,9 @@ pub mod std_utils {
     }
     impl<M> ::core::fmt::Debug for StdUtils<M> {
         fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-            f.debug_tuple(::core::stringify!(StdUtils)).field(&self.address()).finish()
+            f.debug_tuple(::core::stringify!(StdUtils))
+                .field(&self.address())
+                .finish()
         }
     }
     impl<M: ::ethers::providers::Middleware> StdUtils<M> {
@@ -54,17 +55,14 @@ pub mod std_utils {
             address: T,
             client: ::std::sync::Arc<M>,
         ) -> Self {
-            Self(
-                ::ethers::contract::Contract::new(
-                    address.into(),
-                    STDUTILS_ABI.clone(),
-                    client,
-                ),
-            )
+            Self(::ethers::contract::Contract::new(
+                address.into(),
+                STDUTILS_ABI.clone(),
+                client,
+            ))
         }
     }
-    impl<M: ::ethers::providers::Middleware> From<::ethers::contract::Contract<M>>
-    for StdUtils<M> {
+    impl<M: ::ethers::providers::Middleware> From<::ethers::contract::Contract<M>> for StdUtils<M> {
         fn from(contract: ::ethers::contract::Contract<M>) -> Self {
             Self::new(contract.address(), contract.client())
         }

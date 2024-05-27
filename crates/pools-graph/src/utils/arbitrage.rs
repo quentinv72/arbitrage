@@ -7,8 +7,8 @@ use ethers::abi::{encode, Token};
 use ethers::contract::ContractCall;
 use ethers::prelude::*;
 use ethers::providers::Middleware;
-use ethers::types::{Address, Bytes, U256, U64};
 use ethers::types::transaction::eip2718::TypedTransaction;
+use ethers::types::{Address, Bytes, U256, U64};
 use ethers_flashbots::*;
 use log::{error, info, warn};
 
@@ -101,8 +101,7 @@ impl Arbitrage {
                 Arc::clone(&client),
                 bundle_executor_address,
             );
-            next_call =
-                Self::build_data(self.amounts_in[i - 1], self.targets[i], swap_data);
+            next_call = Self::build_data(self.amounts_in[i - 1], self.targets[i], swap_data);
         }
 
         let start_pool_addr = self.targets[0];
@@ -180,7 +179,7 @@ impl Arbitrage {
                     priority_fee_percentage,
                     block_number,
                 )
-                    .await
+                .await
                 {
                     Ok(_) => (),
                     Err(e) => {
