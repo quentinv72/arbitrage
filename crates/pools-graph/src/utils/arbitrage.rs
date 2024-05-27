@@ -7,8 +7,8 @@ use ethers::abi::{encode, Token};
 use ethers::contract::ContractCall;
 use ethers::prelude::*;
 use ethers::providers::Middleware;
-use ethers::types::transaction::eip2718::TypedTransaction;
 use ethers::types::{Address, Bytes, U256, U64};
+use ethers::types::transaction::eip2718::TypedTransaction;
 use ethers_flashbots::*;
 use log::{error, info, warn};
 
@@ -179,7 +179,7 @@ impl Arbitrage {
                     priority_fee_percentage,
                     block_number,
                 )
-                .await
+                    .await
                 {
                     Ok(_) => (),
                     Err(e) => {
@@ -256,5 +256,91 @@ impl Arbitrage {
             Token::Address(target_address),
             Token::Bytes(swap_data.to_vec()),
         ]))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use ethers::prelude::{Http, Provider};
+    use ethers::types::{Address, U256, U64};
+
+    use crate::pool_data::uniswap_v2::UniswapV2;
+    use crate::pools_graph::PoolsGraph;
+    use crate::utils::arbitrage::Arbitrage;
+
+    fn get_graph() -> PoolsGraph {
+        let graph = PoolsGraph::default();
+        let pool_1 = UniswapV2::new(
+            "0x615687F0aC866a61dF6550A17812C71d2635bd91"
+                .parse()
+                .unwrap(),
+            Address::random(),
+            10,
+            Address::random(),
+            10,
+            U64::zero(),
+        )
+            .into();
+        let pool_2 = UniswapV2::new(
+            "0xe6CE0226859f99C095c5b405BF187dC3c55Ab4D8"
+                .parse()
+                .unwrap(),
+            Address::random(),
+            10,
+            Address::random(),
+            10,
+            U64::zero(),
+        )
+            .into();
+        graph.insert(pool_1);
+        graph.insert(pool_2);
+        graph
+    }
+
+    #[test]
+    fn build_transaction() {
+        let client = Arc::new(
+            Provider::<Http>::try_from(
+                "https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg",
+            )
+                .unwrap(),
+        );
+        let graph = get_graph();
+        let arbitrage = Arbitrage {
+            targets: vec![
+                "0x615687F0aC866a61dF6550A17812C71d2635bd91"
+                    .parse()
+                    .unwrap(),
+                "0xe6CE0226859f99C095c5b405BF187dC3c55Ab4D8"
+                    .parse()
+                    .unwrap(),
+            ],
+            amounts_in: vec![
+                U256::from_dec_str("6314425151630").unwrap(),
+                U256::from_dec_str("15842350854553147119").unwrap(),
+            ],
+            amounts_out: vec![
+                U256::from_dec_str("15842350854553147119").unwrap(),
+                U256::from_dec_str("441375928197785").unwrap(),
+            ],
+            zero_for_ones: vec![false, true],
+            amount_to_coinbase: U256::zero(),
+            estimated_profit: U256::zero(),
+        };
+        let bundle_executor_address = "0x2f5A6dd5bCB5ba085e5f6e2DBF43a0BeA4b6fdfC"
+            .parse()
+            .unwrap();
+        let cc = arbitrage.build_transaction(
+            &graph,
+            "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                .parse()
+                .unwrap(),
+            client,
+            bundle_executor_address,
+        );
+        let tx = format!("{}", cc.tx.data().unwrap());
+        assert_eq!(tx, "0x32566586000000000000000000000000615687f0ac866a61df6550a17812c71d2635bd910000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000264022c0d9f000000000000000000000000000000000000000000000000dbdb562a74bf16ef00000000000000000000000000000000000000000000000000000000000000000000000000000000000000002f5a6dd5bcb5ba085e5f6e2dbf43a0bea4b6fdfc000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000001c0000000000000000000000000000000000000000000000000000005be3111708e000000000000000000000000e6ce0226859f99c095c5b405bf187dc3c55ab4d800000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000124022c0d9f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001916dd769a2990000000000000000000000002f5a6dd5bcb5ba085e5f6e2dbf43a0bea4b6fdfc00000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000dbdb562a74bf16ef0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
     }
 }
