@@ -81,7 +81,7 @@ impl PoolDataTrait for UniswapV3 {
     }
 
     fn get_factory(&self) -> Address {
-        todo!()
+        self.factory
     }
 
     fn get_amount_out(&self, _amount_in: U256, _zero_for_one: bool) -> U256 {
@@ -116,7 +116,7 @@ mod tests {
         Provider::<Http>::try_from(
             "https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg",
         )
-        .unwrap()
+            .unwrap()
     }
 
     #[tokio::test]
@@ -140,8 +140,8 @@ mod tests {
             Address::random(),
             client,
         )
-        .await
-        .unwrap();
+            .await
+            .unwrap();
         assert_eq!(pool_data.pool_address, pool_address);
         assert_eq!(pool_data.token_0, token_0);
         assert_eq!(pool_data.token_1, token_1);
