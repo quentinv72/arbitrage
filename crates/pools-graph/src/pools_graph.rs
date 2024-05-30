@@ -1,6 +1,6 @@
+use dashmap::{DashMap, DashSet};
 use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::try_result::TryResult;
-use dashmap::{DashMap, DashSet};
 use ethers::types::Address;
 
 use crate::pool_data::pool_data::{PoolData, PoolDataTrait};
@@ -19,7 +19,7 @@ impl PoolsGraph {
         self._pool_address_to_pool_data.get(pool_address)
     }
 
-    pub fn get_mut_pool_data(
+    pub(crate) fn get_mut_pool_data(
         &self,
         pool_address: &Address,
     ) -> TryResult<RefMut<Address, PoolData>> {

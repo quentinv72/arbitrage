@@ -63,8 +63,7 @@ impl UniswapV2 {
     }
 
     // this is only used by the pools graph test
-    #[cfg(test)]
-    pub(crate) fn new(
+    pub fn new(
         pair_address: Address,
         token_0: Address,
         reserve_0: u128,
@@ -83,6 +82,7 @@ impl UniswapV2 {
         }
     }
 
+    #[inline]
     fn get_amount_out(
         amount_in: U256,
         reserve_in: U256,
@@ -113,6 +113,7 @@ impl PoolDataTrait for UniswapV2 {
         self.block_last_updated
     }
 
+    #[inline]
     fn get_amount_out(&self, amount_in: U256, zero_for_one: bool) -> U256 {
         let reserve_in = if zero_for_one {
             self.reserve_0
@@ -172,7 +173,7 @@ mod tests {
         Provider::<Http>::try_from(
             "https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg",
         )
-        .unwrap()
+            .unwrap()
     }
 
     fn create_pool_data() -> UniswapV2 {
