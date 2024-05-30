@@ -72,13 +72,15 @@ pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
             "factory address {:#032x} has {number_of_pairs} pairs",
             factory.address
         );
+        let factory_address_clone = factory.address;
         let mut tasks = Vec::with_capacity(number_of_pairs.as_usize());
         for i in 0..number_of_pairs.as_u32() {
             let client_clone = Arc::clone(&client);
             let pair_address = factory_contract.all_pairs(U256::from(i)).call().await?;
             let fee = factory.swap_fee;
+
             tasks.push(tokio::spawn(async move {
-                UniswapV2::new_from_client(pair_address, fee, client_clone).await
+                UniswapV2::new_from_client(pair_address, fee, factory_address_clone, client_clone).await
             }));
         }
         for task in tasks {

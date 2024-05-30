@@ -19,6 +19,7 @@ pub trait PoolDataTrait {
     fn get_pool_address(&self) -> Address;
     fn get_last_block_update(&self) -> U64;
     fn get_amount_out(&self, amount_in: U256, zero_for_one: bool) -> U256;
+    fn get_factory(&self) -> Address;
     fn build_swap_calldata<M: Middleware>(
         &self,
         amount_in: U256,

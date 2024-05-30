@@ -1,36 +1,39 @@
+use std::collections::HashSet;
+use std::sync::Arc;
+
 use dashmap::{DashMap, DashSet};
 use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::try_result::TryResult;
+use ethers::prelude::TxHash;
+use ethers::providers::Middleware;
 use ethers::types::Address;
 
 use crate::pool_data::pool_data::{PoolData, PoolDataTrait};
 
 #[derive(Default)]
 pub struct PoolsGraph {
-    _pool_address_to_pool_data: DashMap<Address, PoolData>,
+    pool_address_to_pool_data: DashMap<Address, PoolData>,
     // ERC-20 token -> Set<ERC-20 token>
-    _neighbouring_erc20_tokens: DashMap<Address, DashSet<Address>>,
+    neighbouring_erc20_tokens: DashMap<Address, DashSet<Address>>,
     // (ERC-20 token, ERC-20 token) -> Pool Address
-    _weights: DashMap<(Address, Address), DashSet<Address>>,
+    weights: DashMap<(Address, Address), DashSet<Address>>,
+    // Set of all factories addresses
+    factories: DashSet<Address>,
+    // A set of pools that need to be updated at the start of each new block.
+    // Should be flushed after the updates are done.
+    _pools_to_update: HashSet<Address>,
 }
 
 impl PoolsGraph {
     pub fn get_pool_data(&self, pool_address: &Address) -> Option<Ref<Address, PoolData>> {
-        self._pool_address_to_pool_data.get(pool_address)
-    }
-
-    pub(crate) fn get_mut_pool_data(
-        &self,
-        pool_address: &Address,
-    ) -> TryResult<RefMut<Address, PoolData>> {
-        self._pool_address_to_pool_data.try_get_mut(pool_address)
+        self.pool_address_to_pool_data.get(pool_address)
     }
 
     pub fn get_neighbouring_tokens(
         &self,
         token_address: &Address,
     ) -> Option<Ref<Address, DashSet<Address>>> {
-        self._neighbouring_erc20_tokens.get(token_address)
+        self.neighbouring_erc20_tokens.get(token_address)
     }
 
     pub fn get_pool_addresses(
@@ -38,41 +41,73 @@ impl PoolsGraph {
         token_0: Address,
         token_1: Address,
     ) -> Option<Ref<(Address, Address), DashSet<Address>>> {
-        self._weights.get(&(token_0, token_1))
+        self.weights.get(&(token_0, token_1))
+    }
+
+    pub async fn maybe_update_graph<Tx: Into<TxHash> + Send + Sync, M: Middleware + 'static>(
+        &mut self,
+        tx: Tx,
+        client: Arc<M>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let tx_receipt = client
+            .get_transaction_receipt(tx)
+            .await?
+            .unwrap_or_default();
+        for log in tx_receipt.logs {
+            if self.pool_address_to_pool_data.contains_key(&log.address) {
+                self._pools_to_update.insert(log.address);
+            } else if self.factories.contains(&log.address) {
+                todo!()
+            }
+        }
+        Ok(())
+    }
+
+    // pub async fn flush_updates<M:Middleware>()
+
+    pub(crate) fn get_mut_pool_data(
+        &self,
+        pool_address: &Address,
+    ) -> TryResult<RefMut<Address, PoolData>> {
+        self.pool_address_to_pool_data.try_get_mut(pool_address)
     }
 
     pub(crate) fn insert(&self, pool_data: PoolData) {
+        let factory = pool_data.get_factory();
         let (token_0, token_1) = pool_data.get_tokens();
         let pool_address = pool_data.get_pool_address();
-        self._pool_address_to_pool_data
+        self.pool_address_to_pool_data
             .insert(pool_address, pool_data);
         self.insert_tokens(pool_address, token_0, token_1);
         self.insert_tokens(pool_address, token_1, token_0);
+        if !self.factories.contains(&factory) {
+            self.factories.insert(factory);
+        }
     }
 
     fn insert_tokens(&self, pool_address: Address, token_0: Address, token_1: Address) {
-        match self._neighbouring_erc20_tokens.get(&token_0) {
+        match self.neighbouring_erc20_tokens.get(&token_0) {
             Some(kv) => {
                 kv.value().insert(token_1);
-                match self._weights.get(&(token_0, token_1)) {
+                match self.weights.get(&(token_0, token_1)) {
                     Some(kv) => {
                         kv.value().insert(pool_address);
                     }
                     None => {
                         let weight_set = DashSet::new();
                         weight_set.insert(pool_address);
-                        self._weights.insert((token_0, token_1), weight_set);
+                        self.weights.insert((token_0, token_1), weight_set);
                     }
                 }
             }
             None => {
                 let neighbour_set = DashSet::new();
                 neighbour_set.insert(token_1);
-                self._neighbouring_erc20_tokens
+                self.neighbouring_erc20_tokens
                     .insert(token_0, neighbour_set);
                 let weight_set = DashSet::new();
                 weight_set.insert(pool_address);
-                self._weights.insert((token_0, token_1), weight_set);
+                self.weights.insert((token_0, token_1), weight_set);
             }
         }
     }
@@ -127,60 +162,62 @@ mod tests {
         graph.insert(pd_1.into());
         graph.insert(pd_2.into());
 
+        assert_eq!(graph.factories.len(), 2);
+
         assert!(graph
-            ._neighbouring_erc20_tokens
+            .neighbouring_erc20_tokens
             .get(&token_a)
             .unwrap()
             .contains(&token_b));
         assert!(graph
-            ._neighbouring_erc20_tokens
+            .neighbouring_erc20_tokens
             .get(&token_a)
             .unwrap()
             .contains(&token_c));
         assert!(graph
-            ._neighbouring_erc20_tokens
+            .neighbouring_erc20_tokens
             .get(&token_c)
             .unwrap()
             .contains(&token_a));
         assert!(graph
-            ._neighbouring_erc20_tokens
+            .neighbouring_erc20_tokens
             .get(&token_b)
             .unwrap()
             .contains(&token_a));
         assert!(!graph
-            ._neighbouring_erc20_tokens
+            .neighbouring_erc20_tokens
             .get(&token_b)
             .unwrap()
             .contains(&token_c));
 
         assert!(graph
-            ._weights
+            .weights
             .get(&(token_a, token_b))
             .unwrap()
             .contains(&address_1));
         assert!(graph
-            ._weights
+            .weights
             .get(&(token_b, token_a))
             .unwrap()
             .contains(&address_1));
-        assert_eq!(graph._weights.get(&(token_b, token_a)).unwrap().len(), 1);
-        assert_eq!(graph._weights.get(&(token_a, token_b)).unwrap().len(), 1);
+        assert_eq!(graph.weights.get(&(token_b, token_a)).unwrap().len(), 1);
+        assert_eq!(graph.weights.get(&(token_a, token_b)).unwrap().len(), 1);
         assert!(graph
-            ._weights
+            .weights
             .get(&(token_a, token_c))
             .unwrap()
             .contains(&address_2));
 
         assert!(graph
-            ._weights
+            .weights
             .get(&(token_c, token_a))
             .unwrap()
             .contains(&address_2));
-        assert_eq!(graph._weights.get(&(token_a, token_c)).unwrap().len(), 1);
-        assert_eq!(graph._weights.get(&(token_c, token_a)).unwrap().len(), 1);
+        assert_eq!(graph.weights.get(&(token_a, token_c)).unwrap().len(), 1);
+        assert_eq!(graph.weights.get(&(token_c, token_a)).unwrap().len(), 1);
         assert_eq!(
             graph
-                ._pool_address_to_pool_data
+                .pool_address_to_pool_data
                 .get(&address_1)
                 .unwrap()
                 .value()
@@ -189,7 +226,7 @@ mod tests {
         );
         assert_eq!(
             graph
-                ._pool_address_to_pool_data
+                .pool_address_to_pool_data
                 .get(&address_2)
                 .unwrap()
                 .value()

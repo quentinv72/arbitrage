@@ -47,6 +47,7 @@ pub async fn load_uniswap_v3_pools<M: Middleware + 'static>(
                         pool.token0.id.parse().unwrap(),
                         pool.token1.id.parse().unwrap(),
                         pool.fee_tier.parse().unwrap(),
+                        factory.factory_address,
                         client_clone,
                     )
                     .await

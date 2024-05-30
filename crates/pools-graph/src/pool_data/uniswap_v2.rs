@@ -18,6 +18,7 @@ pub struct UniswapV2 {
     reserve_1: u128,
     block_last_updated: U64,
     swap_fee: U256,
+    factory: Address,
 }
 
 impl UniswapV2 {
@@ -28,6 +29,7 @@ impl UniswapV2 {
     pub async fn new_from_client<M: Middleware>(
         pair_address: Address,
         swap_fee: U256,
+        factory: Address,
         client: Arc<M>,
     ) -> Result<UniswapV2, ContractError<M>> {
         let pool_contract = IUniswapV2Pair::new(pair_address, client);
@@ -42,6 +44,7 @@ impl UniswapV2 {
             reserve_1,
             block_last_updated: U64::zero(),
             swap_fee,
+            factory,
         })
     }
 
@@ -62,7 +65,7 @@ impl UniswapV2 {
         }
     }
 
-    // this is only used by the pools graph test
+    // this is only used by the pools graph tests
     pub fn new(
         pair_address: Address,
         token_0: Address,
@@ -79,6 +82,7 @@ impl UniswapV2 {
             reserve_1,
             block_last_updated,
             swap_fee: U256::zero(),
+            factory: Address::random(),
         }
     }
 
@@ -111,6 +115,10 @@ impl PoolDataTrait for UniswapV2 {
 
     fn get_last_block_update(&self) -> U64 {
         self.block_last_updated
+    }
+
+    fn get_factory(&self) -> Address {
+        self.factory
     }
 
     #[inline]
@@ -185,6 +193,7 @@ mod tests {
             reserve_1: 100000000,
             block_last_updated: U64::one(),
             swap_fee: U256::from(3),
+            factory: Address::random(),
         }
     }
 
@@ -208,9 +217,10 @@ mod tests {
         let token_1 = pair_contract.token_1().await.unwrap();
         let (reserve_0, reserve_1, _) = pair_contract.get_reserves().await.unwrap();
         let swap_fee = U256::zero();
-        let pool_data = UniswapV2::new_from_client(pair_address, swap_fee, client)
-            .await
-            .unwrap();
+        let pool_data =
+            UniswapV2::new_from_client(pair_address, swap_fee, Address::random(), client)
+                .await
+                .unwrap();
         assert_eq!(pool_data.token_0, token_0);
         assert_eq!(pool_data.token_1, token_1);
         assert_eq!(pool_data.reserve_0, reserve_0);

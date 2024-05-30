@@ -18,9 +18,34 @@ pub struct UniswapV3 {
     token_1: Address,
     fee_tier: u32,
     block_last_updates: U64,
+    factory: Address,
 }
 
 impl UniswapV3 {
+    pub async fn new_from_client<M: Middleware>(
+        pool_address: Address,
+        quoter_address: Address,
+        token_0: Address,
+        token_1: Address,
+        fee_tier: u32,
+        factory: Address,
+        client: Arc<M>,
+    ) -> Result<Self, ContractError<M>> {
+        let pool_contract = IUniswapV3Pool::new(pool_address, client);
+        let (sqrt_price_x_96, _, _, _, _, _, _) = pool_contract.slot_0().call().await?;
+        Ok(Self {
+            pool_address,
+            quoter_address,
+            sqrt_price_x_96,
+            token_0,
+            token_1,
+            fee_tier,
+            block_last_updates: U64::zero(),
+            factory,
+        })
+    }
+
+    // Only used in tests
     pub fn new(
         pool_address: Address,
         quoter_address: Address,
@@ -37,28 +62,8 @@ impl UniswapV3 {
             token_1,
             fee_tier,
             block_last_updates: U64::zero(),
+            factory: Address::random(),
         }
-    }
-
-    pub async fn new_from_client<M: Middleware>(
-        pool_address: Address,
-        quoter_address: Address,
-        token_0: Address,
-        token_1: Address,
-        fee_tier: u32,
-        client: Arc<M>,
-    ) -> Result<Self, ContractError<M>> {
-        let pool_contract = IUniswapV3Pool::new(pool_address, client);
-        let (sqrt_price_x_96, _, _, _, _, _, _) = pool_contract.slot_0().call().await?;
-        Ok(Self {
-            pool_address,
-            quoter_address,
-            sqrt_price_x_96,
-            token_0,
-            token_1,
-            fee_tier,
-            block_last_updates: U64::zero(),
-        })
     }
 }
 
@@ -73,6 +78,10 @@ impl PoolDataTrait for UniswapV3 {
 
     fn get_last_block_update(&self) -> U64 {
         self.block_last_updates
+    }
+
+    fn get_factory(&self) -> Address {
+        todo!()
     }
 
     fn get_amount_out(&self, _amount_in: U256, _zero_for_one: bool) -> U256 {
@@ -122,10 +131,17 @@ mod tests {
         let token_1 = Address::random();
         let fee_tier = 5;
         let (sqrt_price_x_96, _, _, _, _, _, _) = pool_contract.slot_0().await.unwrap();
-        let pool_data =
-            UniswapV3::new_from_client(pool_address, quoter, token_0, token_1, fee_tier, client)
-                .await
-                .unwrap();
+        let pool_data = UniswapV3::new_from_client(
+            pool_address,
+            quoter,
+            token_0,
+            token_1,
+            fee_tier,
+            Address::random(),
+            client,
+        )
+        .await
+        .unwrap();
         assert_eq!(pool_data.pool_address, pool_address);
         assert_eq!(pool_data.token_0, token_0);
         assert_eq!(pool_data.token_1, token_1);
