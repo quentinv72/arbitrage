@@ -44,6 +44,7 @@ impl PoolsGraph {
         self.weights.get(&(token_0, token_1))
     }
 
+    #[inline]
     pub async fn maybe_update_graph<Tx: Into<TxHash> + Send + Sync, M: Middleware + 'static>(
         &mut self,
         tx: Tx,
