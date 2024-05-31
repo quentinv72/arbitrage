@@ -20,10 +20,6 @@ pub struct PoolsGraph {
     weights: DashMap<(Address, Address), DashSet<Address>>,
     // Set of all factories addresses
     factories: DashSet<Address>,
-    // A set of pools that need to be updated at the start of each new block.
-    // Should be flushed after the updates are done.
-    // TBD if this stays here
-    // _pools_to_update: HashSet<Address>,
 }
 
 impl PoolsGraph {
