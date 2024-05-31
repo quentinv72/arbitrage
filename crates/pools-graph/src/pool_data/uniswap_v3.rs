@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
-use ethers::contract::ContractError;
+use ethers::abi::{Error, RawLog};
+use ethers::contract::{ContractError, EthEvent};
 use ethers::middleware::Middleware;
-use ethers::prelude::U64;
+use ethers::prelude::{H256, U64};
 use ethers::types::{Address, Bytes, U256};
 
+use contracts::i_uniswap_v_3_factory::PoolCreatedFilter;
 use contracts::i_uniswap_v_3_pool::IUniswapV3Pool;
 
 use crate::pool_data::pool_data::PoolDataTrait;
 
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct UniswapV3 {
     pool_address: Address,
     quoter_address: Address,
@@ -42,6 +44,21 @@ impl UniswapV3 {
             fee_tier,
             block_last_updates: U64::zero(),
             factory,
+        })
+    }
+
+    pub(crate) fn get_new_pool_sig() -> H256 {
+        PoolCreatedFilter::signature()
+    }
+
+    pub(crate) fn new_from_log(log: &RawLog) -> Result<Self, Error> {
+        let parsed_event = PoolCreatedFilter::decode_log(log)?;
+        Ok(Self {
+            pool_address: parsed_event.pool,
+            token_1: parsed_event.token_1,
+            token_0: parsed_event.token_0,
+            fee_tier: parsed_event.fee,
+            ..Default::default()
         })
     }
 
@@ -99,6 +116,13 @@ impl PoolDataTrait for UniswapV3 {
     ) -> Bytes {
         todo!("V3 swap calldata not implemented")
     }
+
+    async fn update_pool<M: Middleware>(
+        &mut self,
+        _client: Arc<M>,
+    ) -> Result<(), ContractError<M>> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -116,7 +140,7 @@ mod tests {
         Provider::<Http>::try_from(
             "https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg",
         )
-            .unwrap()
+        .unwrap()
     }
 
     #[tokio::test]
@@ -140,8 +164,8 @@ mod tests {
             Address::random(),
             client,
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
         assert_eq!(pool_data.pool_address, pool_address);
         assert_eq!(pool_data.token_0, token_0);
         assert_eq!(pool_data.token_1, token_1);

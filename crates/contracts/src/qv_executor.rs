@@ -752,7 +752,7 @@ pub mod qv_executor {
         > {
             let factory = ::ethers::contract::ContractFactory::new(
                 QVEXECUTOR_ABI.clone(),
-                QVEXECUTOR_BYTECODE.clone(),
+                QVEXECUTOR_BYTECODE.clone().into(),
                 client,
             );
             let deployer = factory.deploy(constructor_args)?;

@@ -17,6 +17,7 @@ pub mod i_pancake_v_3_swap_callback;
 pub mod i_uniswap_v_2_callee;
 pub mod i_uniswap_v_2_factory;
 pub mod i_uniswap_v_2_pair;
+pub mod i_uniswap_v_3_factory;
 pub mod i_uniswap_v_3_pool;
 pub mod i_uniswap_v_3_swap_callback;
 pub mod ierc_165;

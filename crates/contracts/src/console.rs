@@ -103,7 +103,7 @@ pub mod console {
         > {
             let factory = ::ethers::contract::ContractFactory::new(
                 CONSOLE_ABI.clone(),
-                CONSOLE_BYTECODE.clone(),
+                CONSOLE_BYTECODE.clone().into(),
                 client,
             );
             let deployer = factory.deploy(constructor_args)?;

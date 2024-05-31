@@ -57,6 +57,13 @@ pub static PANCAKE_SWAP_FACTORY: Lazy<Factory> = Lazy::new(|| Factory {
     swap_fee: U256::from(3),
 });
 
+// const NEW_POOL: Event = Event {
+//     name: "PairCreated".into(),
+//     inputs:
+//
+//
+// }
+
 pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
     pools_graph: &PoolsGraph,
     factory_addresses: Vec<&Factory>,
@@ -80,7 +87,8 @@ pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
             let fee = factory.swap_fee;
 
             tasks.push(tokio::spawn(async move {
-                UniswapV2::new_from_client(pair_address, fee, factory_address_clone, client_clone).await
+                UniswapV2::new_from_client(pair_address, fee, factory_address_clone, client_clone)
+                    .await
             }));
         }
         for task in tasks {
@@ -107,7 +115,9 @@ pub async fn refresh_reserves<M: Middleware>(
         TryResult::Present(mut value) => {
             match value.value_mut() {
                 PoolData::UniswapV2(inner) => {
-                    inner.maybe_refresh_reserves(current_block, client).await?
+                    inner
+                        .maybe_refresh_reserves(Some(current_block), client)
+                        .await?
                 }
                 PoolData::UniswapV3(_) => {
                     panic!("Refreshing reserves is being called on a non-Uni V2 pool...")

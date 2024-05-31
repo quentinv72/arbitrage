@@ -103,7 +103,7 @@ pub mod std_json {
         > {
             let factory = ::ethers::contract::ContractFactory::new(
                 STDJSON_ABI.clone(),
-                STDJSON_BYTECODE.clone(),
+                STDJSON_BYTECODE.clone().into(),
                 client,
             );
             let deployer = factory.deploy(constructor_args)?;

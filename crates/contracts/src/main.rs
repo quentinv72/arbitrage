@@ -11,12 +11,12 @@ use walkdir::WalkDir;
 // Generate Rust bindings for contracts
 fn main() {
     // Directory path
-    let dir_path = "/Users/quentin/arbitrage/contracts/src/json_abi";
+    let dir_path = "crates/contracts/src/json_abi";
     let rust_extension = ".rs";
     let mut lib = OpenOptions::new()
         .write(true)
         .truncate(true)
-        .open("/Users/quentin/arbitrage/contracts/src/lib.rs")
+        .open("crates/contracts/src/lib.rs")
         .expect("cannot open file");
 
     let mut seen: HashSet<String> = HashSet::new();
@@ -35,7 +35,7 @@ fn main() {
             let module_name = contract_name.to_case(Case::Snake);
             let binding_filename = format!(
                 "{}{}{}",
-                "/Users/quentin/arbitrage/contracts/src/", module_name, rust_extension
+                "crates/contracts/src/", module_name, rust_extension
             );
             Abigen::new(contract_name, abi)
                 .unwrap()

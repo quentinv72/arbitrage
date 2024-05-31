@@ -4,9 +4,10 @@ use std::sync::Arc;
 use dashmap::{DashMap, DashSet};
 use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::try_result::TryResult;
+use ethers::contract::ContractError;
 use ethers::prelude::TxHash;
 use ethers::providers::Middleware;
-use ethers::types::Address;
+use ethers::types::{Address, Block};
 
 use crate::pool_data::pool_data::{PoolData, PoolDataTrait};
 
@@ -21,14 +22,17 @@ pub struct PoolsGraph {
     factories: DashSet<Address>,
     // A set of pools that need to be updated at the start of each new block.
     // Should be flushed after the updates are done.
-    _pools_to_update: HashSet<Address>,
+    // TBD if this stays here
+    // _pools_to_update: HashSet<Address>,
 }
 
 impl PoolsGraph {
+    #[inline]
     pub fn get_pool_data(&self, pool_address: &Address) -> Option<Ref<Address, PoolData>> {
         self.pool_address_to_pool_data.get(pool_address)
     }
 
+    #[inline]
     pub fn get_neighbouring_tokens(
         &self,
         token_address: &Address,
@@ -36,6 +40,7 @@ impl PoolsGraph {
         self.neighbouring_erc20_tokens.get(token_address)
     }
 
+    #[inline]
     pub fn get_pool_addresses(
         &self,
         token_0: Address,
@@ -45,26 +50,66 @@ impl PoolsGraph {
     }
 
     #[inline]
-    pub async fn maybe_update_graph<Tx: Into<TxHash> + Send + Sync, M: Middleware + 'static>(
-        &mut self,
-        tx: Tx,
+    pub async fn maybe_update_graph<Tx, M>(
+        &self,
+        block: Block<Tx>,
         client: Arc<M>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Box<dyn std::error::Error>>
+        where
+            Tx: Into<TxHash> + Send + Sync,
+            M: Middleware + 'static
+    {
+        let mut pools_to_update = HashSet::new();
+        for tx in block.transactions {
+            self.maybe_update_graph_tx(tx, &mut pools_to_update, client.clone()).await?;
+        }
+        self.flush_updates(client, pools_to_update).await?;
+        Ok(())
+    }
+
+    #[inline]
+    async fn maybe_update_graph_tx<Tx, M>(
+        &self,
+        tx: Tx,
+        pools_to_update: &mut HashSet<Address>,
+        client: Arc<M>,
+    ) -> Result<(), Box<dyn std::error::Error>>
+        where
+            Tx: Into<TxHash> + Send + Sync,
+            M: Middleware + 'static
+    {
         let tx_receipt = client
             .get_transaction_receipt(tx)
             .await?
             .unwrap_or_default();
         for log in tx_receipt.logs {
             if self.pool_address_to_pool_data.contains_key(&log.address) {
-                self._pools_to_update.insert(log.address);
+                pools_to_update.insert(log.address);
             } else if self.factories.contains(&log.address) {
-                todo!()
+                if let Some(new_pool) = PoolData::new_pool(log)? {
+                    pools_to_update.insert(new_pool.get_pool_address());
+                    self.insert(new_pool);
+                }
             }
         }
         Ok(())
     }
 
-    // pub async fn flush_updates<M:Middleware>()
+    #[inline]
+    // TODO figure out if this can be parallelized
+    // intuition is probably not...
+    async fn flush_updates<M: Middleware + 'static>(
+        &self,
+        client: Arc<M>,
+        pools_to_update: HashSet<Address>,
+    ) -> Result<(), ContractError<M>> {
+        for pool in pools_to_update.iter() {
+            let client_clone = Arc::clone(&client);
+            let mut pool_data = self.pool_address_to_pool_data.get_mut(&pool).unwrap();
+            pool_data.update_pool(client_clone).await?;
+        }
+        Ok(())
+    }
 
     pub(crate) fn get_mut_pool_data(
         &self,

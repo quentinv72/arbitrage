@@ -1,15 +1,19 @@
 use std::ops::{Div, Mul};
 use std::sync::Arc;
 
+use ethers::abi;
+use ethers::abi::RawLog;
+use ethers::contract::EthEvent;
 use ethers::middleware::Middleware;
-use ethers::prelude::{Bytes, ContractError, U256};
+use ethers::prelude::{Bytes, ContractError, H256, U256};
 use ethers::types::{Address, U64};
 
+use contracts::i_uniswap_v_2_factory::PairCreatedFilter;
 use contracts::i_uniswap_v_2_pair::IUniswapV2Pair;
 
 use crate::pool_data::pool_data::PoolDataTrait;
 
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct UniswapV2 {
     pair_address: Address,
     token_0: Address,
@@ -48,19 +52,33 @@ impl UniswapV2 {
         })
     }
 
+    pub(crate) fn get_new_pool_sig() -> H256 {
+        PairCreatedFilter::signature()
+    }
+
+    pub(crate) fn new_from_log(log: &RawLog) -> Result<Self, abi::Error> {
+        let parsed_event = PairCreatedFilter::decode_log(log)?;
+        Ok(Self {
+            pair_address: parsed_event.pair,
+            token_0: parsed_event.token_0,
+            token_1: parsed_event.token_1,
+            ..Default::default()
+        })
+    }
+
     pub async fn maybe_refresh_reserves<M: Middleware>(
         &mut self,
-        current_block: U64,
+        current_block: Option<U64>,
         client: Arc<M>,
     ) -> Result<(), ContractError<M>> {
-        if self.block_last_updated == current_block {
+        if current_block.is_some() && self.block_last_updated == current_block.unwrap() {
             Ok(())
         } else {
             let pair_contract = IUniswapV2Pair::new(self.pair_address, client);
             let (reserve_0, reserve_1, _) = pair_contract.get_reserves().call().await?;
             self.reserve_0 = reserve_0;
             self.reserve_1 = reserve_1;
-            self.block_last_updated = current_block;
+            self.block_last_updated = current_block.unwrap_or_default();
             Ok(())
         }
     }
@@ -163,6 +181,10 @@ impl PoolDataTrait for UniswapV2 {
                 .unwrap()
         }
     }
+
+    async fn update_pool<M: Middleware>(&mut self, client: Arc<M>) -> Result<(), ContractError<M>> {
+        Ok(self.maybe_refresh_reserves(None, client).await?)
+    }
 }
 
 #[cfg(test)]
@@ -181,7 +203,7 @@ mod tests {
         Provider::<Http>::try_from(
             "https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg",
         )
-            .unwrap()
+        .unwrap()
     }
 
     fn create_pool_data() -> UniswapV2 {
