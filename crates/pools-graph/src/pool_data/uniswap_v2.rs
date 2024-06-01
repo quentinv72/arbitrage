@@ -203,7 +203,7 @@ mod tests {
         Provider::<Http>::try_from(
             "https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg",
         )
-        .unwrap()
+            .unwrap()
     }
 
     fn create_pool_data() -> UniswapV2 {
@@ -240,7 +240,7 @@ mod tests {
         let token_0 = pair_contract.token_0().await.unwrap();
         let token_1 = pair_contract.token_1().await.unwrap();
         let (reserve_0, reserve_1, _) = pair_contract.get_reserves().await.unwrap();
-        let swap_fee = U256::zero();
+        let swap_fee = U256::from(3);
         let pool_data = UniswapV2::new_from_client(pair_address, FactoryV2::default(), client)
             .await
             .unwrap();
