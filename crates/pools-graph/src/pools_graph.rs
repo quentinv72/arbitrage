@@ -1,14 +1,15 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use dashmap::{DashMap, DashSet};
 use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::try_result::TryResult;
+use dashmap::{DashMap, DashSet};
 use ethers::contract::ContractError;
 use ethers::prelude::TxHash;
 use ethers::providers::Middleware;
 use ethers::types::{Address, Block};
 
+use crate::pool_data::factory::{Factory, GetAddress};
 use crate::pool_data::pool_data::{PoolData, PoolDataTrait};
 
 #[derive(Default)]
@@ -19,7 +20,7 @@ pub struct PoolsGraph {
     // (ERC-20 token, ERC-20 token) -> Pool Address
     weights: DashMap<(Address, Address), DashSet<Address>>,
     // Set of all factories addresses
-    factories: DashSet<Address>,
+    factories: DashMap<Address, Factory>,
 }
 
 impl PoolsGraph {
@@ -45,19 +46,23 @@ impl PoolsGraph {
         self.weights.get(&(token_0, token_1))
     }
 
+    // TODO figure out how to reduce number of calls to get logs.
+    // Maybe using eth_getLogs?
+    // Use different ethereum client
     #[inline]
     pub async fn maybe_update_graph<Tx, M>(
         &self,
         block: Block<Tx>,
         client: Arc<M>,
     ) -> Result<(), Box<dyn std::error::Error>>
-        where
-            Tx: Into<TxHash> + Send + Sync,
-            M: Middleware + 'static
+    where
+        Tx: Into<TxHash> + Send + Sync,
+        M: Middleware + 'static,
     {
         let mut pools_to_update = HashSet::new();
         for tx in block.transactions {
-            self.maybe_update_graph_tx(tx, &mut pools_to_update, client.clone()).await?;
+            self.maybe_update_graph_tx(tx, &mut pools_to_update, client.clone())
+                .await?;
         }
         self.flush_updates(client, pools_to_update).await?;
         Ok(())
@@ -70,9 +75,9 @@ impl PoolsGraph {
         pools_to_update: &mut HashSet<Address>,
         client: Arc<M>,
     ) -> Result<(), Box<dyn std::error::Error>>
-        where
-            Tx: Into<TxHash> + Send + Sync,
-            M: Middleware + 'static
+    where
+        Tx: Into<TxHash> + Send + Sync,
+        M: Middleware + 'static,
     {
         let tx_receipt = client
             .get_transaction_receipt(tx)
@@ -81,8 +86,9 @@ impl PoolsGraph {
         for log in tx_receipt.logs {
             if self.pool_address_to_pool_data.contains_key(&log.address) {
                 pools_to_update.insert(log.address);
-            } else if self.factories.contains(&log.address) {
-                if let Some(new_pool) = PoolData::new_pool(log)? {
+            } else if self.factories.contains_key(&log.address) {
+                let factory = self.factories.get(&log.address).unwrap();
+                if let Some(new_pool) = PoolData::new_pool(log, *factory)? {
                     pools_to_update.insert(new_pool.get_pool_address());
                     self.insert(new_pool);
                 }
@@ -101,7 +107,7 @@ impl PoolsGraph {
     ) -> Result<(), ContractError<M>> {
         for pool in pools_to_update.iter() {
             let client_clone = Arc::clone(&client);
-            let mut pool_data = self.pool_address_to_pool_data.get_mut(&pool).unwrap();
+            let mut pool_data = self.pool_address_to_pool_data.get_mut(pool).unwrap();
             pool_data.update_pool(client_clone).await?;
         }
         Ok(())
@@ -122,8 +128,8 @@ impl PoolsGraph {
             .insert(pool_address, pool_data);
         self.insert_tokens(pool_address, token_0, token_1);
         self.insert_tokens(pool_address, token_1, token_0);
-        if !self.factories.contains(&factory) {
-            self.factories.insert(factory);
+        if !self.factories.contains_key(&factory.get_address()) {
+            self.factories.insert(factory.get_address(), factory);
         }
     }
 
@@ -157,9 +163,15 @@ impl PoolsGraph {
 
 #[cfg(test)]
 mod tests {
-    use ethers::types::U256;
+    use std::sync::Arc;
 
-    use crate::pool_data::pool_data::PoolDataTrait;
+    use ethers::prelude::{Http, Provider};
+    use ethers::providers::Middleware;
+    use ethers::types::{Address, BlockNumber, U256, U64};
+    use ethers::utils::Anvil;
+
+    use crate::pool_data::factory::FactoryV2;
+    use crate::pool_data::pool_data::{PoolData, PoolDataTrait};
     use crate::pool_data::uniswap_v2::UniswapV2;
     use crate::pool_data::uniswap_v3::UniswapV3;
     use crate::pools_graph::PoolsGraph;
@@ -167,7 +179,6 @@ mod tests {
     #[test]
     fn successfully_inserts_into_graph() {
         let graph: PoolsGraph = Default::default();
-        let quoter_address = "0x1F98431c8aD98553881AE4a59f267346ea31F784";
         let token_a = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e"
             .parse()
             .unwrap();
@@ -183,14 +194,7 @@ mod tests {
         let address_2 = "0x1F98431c8aD98523631AE4a59f267346ea31F784"
             .parse()
             .unwrap();
-        let pd_1 = UniswapV3::new(
-            address_1,
-            quoter_address.parse().unwrap(),
-            U256::from(0),
-            token_a,
-            token_b,
-            1000,
-        );
+        let pd_1 = UniswapV3::new(address_1, U256::from(0), token_a, token_b, 1000, None);
 
         let pd_2 = UniswapV2::new(
             address_2,
@@ -199,6 +203,7 @@ mod tests {
             token_c,
             939393,
             ethers::prelude::U64::zero(),
+            None,
         );
 
         graph.insert(pd_1.into());
@@ -291,5 +296,48 @@ mod tests {
             .unwrap()
             .contains(&address_1));
         assert!(graph.get_pool_addresses(token_a, token_a).is_none());
+    }
+
+    #[tokio::test]
+    async fn graph_update() {
+        let graph = PoolsGraph::default();
+        let factory_address = "0xB7f907f7A9eBC822a80BD25E224be42Ce0A698A0"
+            .parse()
+            .unwrap();
+        let factory = FactoryV2 {
+            address: factory_address,
+            swap_fee: U256::from(3),
+        };
+        graph.factories.insert(factory_address, factory.into());
+        let anvil = Anvil::new()
+            .fork("https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg@6011385")
+            .spawn();
+        let new_pair_address: Address = "0xDaB5F999db06e852d5F6C5e24F00DeF232B8B189"
+            .parse()
+            .unwrap();
+        let provider = Arc::new(Provider::<Http>::try_from(anvil.endpoint()).unwrap());
+        assert!(graph.get_pool_data(&new_pair_address).is_none());
+        let block = provider.get_block(BlockNumber::Latest).await.unwrap();
+        graph
+            .maybe_update_graph(block.unwrap(), provider)
+            .await
+            .unwrap();
+        assert_eq!(
+            *graph.get_pool_data(&new_pair_address).unwrap().value(),
+            PoolData::UniswapV2(UniswapV2::new(
+                new_pair_address,
+                "0xcB86e0b626FB47c8017E92d0b41B1b29F267aDAC"
+                    .parse()
+                    .unwrap(),
+                0,
+                "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
+                    .parse()
+                    .unwrap(),
+                0,
+                U64::zero(),
+                Some(factory),
+            ))
+        );
+        drop(anvil);
     }
 }

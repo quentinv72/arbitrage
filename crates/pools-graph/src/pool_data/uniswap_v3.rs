@@ -9,35 +9,33 @@ use ethers::types::{Address, Bytes, U256};
 use contracts::i_uniswap_v_3_factory::PoolCreatedFilter;
 use contracts::i_uniswap_v_3_pool::IUniswapV3Pool;
 
+use crate::pool_data::factory::{Factory, FactoryV3};
 use crate::pool_data::pool_data::PoolDataTrait;
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct UniswapV3 {
     pool_address: Address,
-    quoter_address: Address,
     sqrt_price_x_96: U256,
     token_0: Address,
     token_1: Address,
     fee_tier: u32,
     block_last_updates: U64,
-    factory: Address,
+    factory: FactoryV3,
 }
 
 impl UniswapV3 {
     pub async fn new_from_client<M: Middleware>(
         pool_address: Address,
-        quoter_address: Address,
         token_0: Address,
         token_1: Address,
         fee_tier: u32,
-        factory: Address,
+        factory: FactoryV3,
         client: Arc<M>,
     ) -> Result<Self, ContractError<M>> {
         let pool_contract = IUniswapV3Pool::new(pool_address, client);
         let (sqrt_price_x_96, _, _, _, _, _, _) = pool_contract.slot_0().call().await?;
         Ok(Self {
             pool_address,
-            quoter_address,
             sqrt_price_x_96,
             token_0,
             token_1,
@@ -51,13 +49,14 @@ impl UniswapV3 {
         PoolCreatedFilter::signature()
     }
 
-    pub(crate) fn new_from_log(log: &RawLog) -> Result<Self, Error> {
+    pub(crate) fn new_from_log(log: &RawLog, factory_v3: FactoryV3) -> Result<Self, Error> {
         let parsed_event = PoolCreatedFilter::decode_log(log)?;
         Ok(Self {
             pool_address: parsed_event.pool,
             token_1: parsed_event.token_1,
             token_0: parsed_event.token_0,
             fee_tier: parsed_event.fee,
+            factory: factory_v3,
             ..Default::default()
         })
     }
@@ -65,21 +64,20 @@ impl UniswapV3 {
     // Only used in tests
     pub fn new(
         pool_address: Address,
-        quoter_address: Address,
         sqrt_price_x_96: U256,
         token_0: Address,
         token_1: Address,
         fee_tier: u32,
+        factory: Option<FactoryV3>,
     ) -> Self {
         Self {
             pool_address,
-            quoter_address,
             sqrt_price_x_96,
             token_0,
             token_1,
             fee_tier,
             block_last_updates: U64::zero(),
-            factory: Address::random(),
+            factory: factory.unwrap_or_default(),
         }
     }
 }
@@ -97,8 +95,8 @@ impl PoolDataTrait for UniswapV3 {
         self.block_last_updates
     }
 
-    fn get_factory(&self) -> Address {
-        self.factory
+    fn get_factory(&self) -> Factory {
+        self.factory.into()
     }
 
     fn get_amount_out(&self, _amount_in: U256, _zero_for_one: bool) -> U256 {
@@ -134,6 +132,7 @@ mod tests {
 
     use contracts::i_uniswap_v_3_pool::IUniswapV3Pool;
 
+    use crate::pool_data::factory::FactoryV3;
     use crate::pool_data::uniswap_v3::UniswapV3;
 
     fn get_client() -> Provider<Http> {
@@ -150,18 +149,16 @@ mod tests {
             .unwrap();
         let client = Arc::new(get_client());
         let pool_contract = IUniswapV3Pool::new(pool_address, client.clone());
-        let quoter = Address::random();
         let token_0 = Address::random();
         let token_1 = Address::random();
         let fee_tier = 5;
         let (sqrt_price_x_96, _, _, _, _, _, _) = pool_contract.slot_0().await.unwrap();
         let pool_data = UniswapV3::new_from_client(
             pool_address,
-            quoter,
             token_0,
             token_1,
             fee_tier,
-            Address::random(),
+            FactoryV3::default(),
             client,
         )
         .await

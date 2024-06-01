@@ -11,6 +11,7 @@ use ethers::types::{Address, U64};
 use contracts::i_uniswap_v_2_factory::PairCreatedFilter;
 use contracts::i_uniswap_v_2_pair::IUniswapV2Pair;
 
+use crate::pool_data::factory::{Factory, FactoryV2};
 use crate::pool_data::pool_data::PoolDataTrait;
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Default)]
@@ -21,8 +22,7 @@ pub struct UniswapV2 {
     token_1: Address,
     reserve_1: u128,
     block_last_updated: U64,
-    swap_fee: U256,
-    factory: Address,
+    factory: FactoryV2,
 }
 
 impl UniswapV2 {
@@ -32,8 +32,7 @@ impl UniswapV2 {
 
     pub async fn new_from_client<M: Middleware>(
         pair_address: Address,
-        swap_fee: U256,
-        factory: Address,
+        factory: FactoryV2,
         client: Arc<M>,
     ) -> Result<UniswapV2, ContractError<M>> {
         let pool_contract = IUniswapV2Pair::new(pair_address, client);
@@ -47,7 +46,6 @@ impl UniswapV2 {
             reserve_0,
             reserve_1,
             block_last_updated: U64::zero(),
-            swap_fee,
             factory,
         })
     }
@@ -56,12 +54,13 @@ impl UniswapV2 {
         PairCreatedFilter::signature()
     }
 
-    pub(crate) fn new_from_log(log: &RawLog) -> Result<Self, abi::Error> {
+    pub(crate) fn new_from_log(log: &RawLog, factory_v2: FactoryV2) -> Result<Self, abi::Error> {
         let parsed_event = PairCreatedFilter::decode_log(log)?;
         Ok(Self {
             pair_address: parsed_event.pair,
             token_0: parsed_event.token_0,
             token_1: parsed_event.token_1,
+            factory: factory_v2,
             ..Default::default()
         })
     }
@@ -91,6 +90,7 @@ impl UniswapV2 {
         token_1: Address,
         reserve_1: u128,
         block_last_updated: U64,
+        factory: Option<FactoryV2>,
     ) -> Self {
         Self {
             pair_address,
@@ -99,8 +99,7 @@ impl UniswapV2 {
             token_1,
             reserve_1,
             block_last_updated,
-            swap_fee: U256::zero(),
-            factory: Address::random(),
+            factory: factory.unwrap_or_default(),
         }
     }
 
@@ -135,8 +134,8 @@ impl PoolDataTrait for UniswapV2 {
         self.block_last_updated
     }
 
-    fn get_factory(&self) -> Address {
-        self.factory
+    fn get_factory(&self) -> Factory {
+        self.factory.into()
     }
 
     #[inline]
@@ -155,7 +154,7 @@ impl PoolDataTrait for UniswapV2 {
             amount_in,
             U256::from(reserve_in),
             U256::from(reserve_out),
-            self.swap_fee,
+            self.factory.swap_fee,
         )
     }
 
@@ -183,7 +182,7 @@ impl PoolDataTrait for UniswapV2 {
     }
 
     async fn update_pool<M: Middleware>(&mut self, client: Arc<M>) -> Result<(), ContractError<M>> {
-        Ok(self.maybe_refresh_reserves(None, client).await?)
+        self.maybe_refresh_reserves(None, client).await
     }
 }
 
@@ -196,6 +195,7 @@ mod tests {
 
     use contracts::i_uniswap_v_2_pair::IUniswapV2Pair;
 
+    use crate::pool_data::factory::FactoryV2;
     use crate::pool_data::pool_data::PoolDataTrait;
     use crate::pool_data::uniswap_v2::UniswapV2;
 
@@ -214,8 +214,10 @@ mod tests {
             reserve_0: 1000,
             reserve_1: 100000000,
             block_last_updated: U64::one(),
-            swap_fee: U256::from(3),
-            factory: Address::random(),
+            factory: FactoryV2 {
+                address: Address::random(),
+                swap_fee: U256::from(3),
+            },
         }
     }
 
@@ -239,16 +241,15 @@ mod tests {
         let token_1 = pair_contract.token_1().await.unwrap();
         let (reserve_0, reserve_1, _) = pair_contract.get_reserves().await.unwrap();
         let swap_fee = U256::zero();
-        let pool_data =
-            UniswapV2::new_from_client(pair_address, swap_fee, Address::random(), client)
-                .await
-                .unwrap();
+        let pool_data = UniswapV2::new_from_client(pair_address, FactoryV2::default(), client)
+            .await
+            .unwrap();
         assert_eq!(pool_data.token_0, token_0);
         assert_eq!(pool_data.token_1, token_1);
         assert_eq!(pool_data.reserve_0, reserve_0);
         assert_eq!(pool_data.reserve_1, reserve_1);
         assert_eq!(pool_data.block_last_updated, U64::zero());
-        assert_eq!(pool_data.swap_fee, swap_fee)
+        assert_eq!(pool_data.factory.swap_fee, swap_fee)
     }
 
     #[test]

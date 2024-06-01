@@ -12,6 +12,7 @@ pub fn uniswap_v2_amount_out(c: &mut Criterion) {
         Address::random(),
         41160837939896193107,
         U64::zero(),
+        None,
     );
     c.bench_function("v2_amount_out", |b| {
         b.iter(|| v2_pool.get_amount_out(black_box(U256::from(210210)), black_box(true)))

@@ -12,19 +12,20 @@ use log::info;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 
+use pools_graph::pool_data::factory::FactoryV2;
 use pools_graph::pool_data::pool_data::{PoolData, PoolDataTrait};
 use pools_graph::pools_graph::PoolsGraph;
 use pools_graph::utils::arbitrage::Arbitrage;
 use pools_graph::utils::uniswap_v2;
 use pools_graph::utils::uniswap_v2::{
-    Factory, CRO_DEFI_FACTORY, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY, SUSHISWAP_FACTORY,
+    CRO_DEFI_FACTORY, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY, SUSHISWAP_FACTORY,
     UNISWAP_V2_FACTORY, ZEUS_FACTORY,
 };
 use utils::logging::setup_logging;
 use utils::utils::{Setup, Utils};
 use utils::TOKEN_BLACKLIST;
 
-static V2_FACTORIES: [&Lazy<Factory>; 6] = [
+static V2_FACTORIES: [&Lazy<FactoryV2>; 6] = [
     &UNISWAP_V2_FACTORY,
     &SUSHISWAP_FACTORY,
     &LUA_SWAP_FACTORY,

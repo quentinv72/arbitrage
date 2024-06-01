@@ -2,20 +2,14 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ethers::middleware::Middleware;
-use ethers::types::Address;
 use log::{error, info};
 use reqwest_graphql::Client;
 use serde::{Deserialize, Serialize};
 
+use crate::pool_data::factory::FactoryV3;
 use crate::pool_data::pool_data::PoolData;
 use crate::pool_data::uniswap_v3::UniswapV3;
 use crate::pools_graph::PoolsGraph;
-
-pub struct FactoryV3 {
-    factory_address: Address,
-    subgraph_url: String,
-    quoter_address: Address,
-}
 
 pub async fn load_uniswap_v3_pools<M: Middleware + 'static>(
     pools_graph: &PoolsGraph,
@@ -24,30 +18,30 @@ pub async fn load_uniswap_v3_pools<M: Middleware + 'static>(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     for factory in factories {
-        let pool_count = get_total_v3_pools(&factory.subgraph_url).await.unwrap();
-        info!("Factory {} has {pool_count} pools", factory.factory_address);
+        let pool_count = get_total_v3_pools(factory.subgraph_url).await.unwrap();
+        info!("Factory {} has {pool_count} pools", factory.address);
         let mut id_gt = String::from("");
         loop {
             let vars = Vars {
                 first: 1000,
                 id_gt: id_gt.clone(),
             };
-            let pools = get_pools(&factory.subgraph_url, vars).await?;
+            let pools = get_pools(factory.subgraph_url, vars).await?;
             if pools.is_empty() {
                 break;
             }
             let mut tasks = Vec::with_capacity(pools.len());
             id_gt.clone_from(&pools.last().unwrap().id);
             for pool in pools {
+                // let factory_clone = factory.clone();
                 let client_clone = Arc::clone(&client);
                 tasks.push(tokio::spawn(async move {
                     UniswapV3::new_from_client(
                         pool.id.parse().unwrap(),
-                        factory.quoter_address,
                         pool.token0.id.parse().unwrap(),
                         pool.token1.id.parse().unwrap(),
                         pool.fee_tier.parse().unwrap(),
-                        factory.factory_address,
+                        factory,
                         client_clone,
                     )
                     .await

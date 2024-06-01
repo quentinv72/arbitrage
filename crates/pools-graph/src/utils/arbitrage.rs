@@ -281,6 +281,7 @@ mod tests {
             Address::random(),
             10,
             U64::zero(),
+            None,
         )
         .into();
         let pool_2 = UniswapV2::new(
@@ -292,6 +293,7 @@ mod tests {
             Address::random(),
             10,
             U64::zero(),
+            None,
         )
         .into();
         graph.insert(pool_1);

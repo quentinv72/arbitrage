@@ -15,3 +15,4 @@ criterion.workspace = true
 
 [lints.clippy]
 module_inception = "allow"
+useless_conversion = "allow"
