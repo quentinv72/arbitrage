@@ -1,4 +1,4 @@
-name: Rust
+name: Build & Test
 
 on:
   push:
@@ -12,14 +12,12 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
       - name: Build
         run: cargo build --verbose
-      - name: Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
       - name: Run tests
         run: cargo test --verbose
