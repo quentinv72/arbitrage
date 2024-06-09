@@ -40,5 +40,6 @@ pub mod std_storage_safe;
 pub mod std_utils;
 pub mod test;
 pub mod test_base;
+pub mod uniswap_v_3_quoter;
 pub mod vm;
 pub mod vm_safe;

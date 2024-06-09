@@ -2,17 +2,18 @@ use std::ops::{Div, Mul};
 use std::sync::Arc;
 
 use ethers::abi;
-use ethers::abi::RawLog;
+use ethers::abi::{AbiEncode, RawLog};
 use ethers::contract::EthEvent;
 use ethers::middleware::Middleware;
 use ethers::prelude::{Bytes, ContractError, H256, U256};
 use ethers::types::{Address, U64};
 
 use contracts::i_uniswap_v_2_factory::PairCreatedFilter;
-use contracts::i_uniswap_v_2_pair::IUniswapV2Pair;
+use contracts::i_uniswap_v_2_pair::{IUniswapV2Pair, SwapCall};
 
 use crate::pool_data::factory::{Factory, FactoryV2};
 use crate::pool_data::pool_data::PoolDataTrait;
+use crate::utils::EthersCacheDB;
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct UniswapV2 {
@@ -139,7 +140,12 @@ impl PoolDataTrait for UniswapV2 {
     }
 
     #[inline]
-    fn get_amount_out(&self, amount_in: U256, zero_for_one: bool) -> U256 {
+    fn get_amount_out<M: Middleware>(
+        &self,
+        amount_in: U256,
+        zero_for_one: bool,
+        _cache_db: Option<&mut EthersCacheDB<M>>,
+    ) -> anyhow::Result<U256> {
         let reserve_in = if zero_for_one {
             self.reserve_0
         } else {
@@ -150,34 +156,40 @@ impl PoolDataTrait for UniswapV2 {
         } else {
             self.reserve_0
         };
-        Self::get_amount_out(
+        Ok(Self::get_amount_out(
             amount_in,
             U256::from(reserve_in),
             U256::from(reserve_out),
             self.factory.swap_fee,
-        )
+        ))
     }
 
-    fn build_swap_calldata<M: Middleware>(
+    fn build_swap_calldata(
         &self,
         _amount_in: U256,
         amount_out: U256,
         zero_for_one: bool,
         data: Bytes,
-        client: Arc<M>,
         bundle_executor_address: Address,
     ) -> Bytes {
-        let uniswap_v2_contract = IUniswapV2Pair::new(self.pair_address, client);
         if zero_for_one {
-            uniswap_v2_contract
-                .swap(U256::zero(), amount_out, bundle_executor_address, data)
-                .calldata()
-                .unwrap()
+            SwapCall {
+                amount_0_out: U256::zero(),
+                amount_1_out: amount_out,
+                to: bundle_executor_address,
+                data,
+            }
+                .encode()
+                .into()
         } else {
-            uniswap_v2_contract
-                .swap(amount_out, U256::zero(), bundle_executor_address, data)
-                .calldata()
-                .unwrap()
+            SwapCall {
+                amount_0_out: amount_out,
+                amount_1_out: U256::zero(),
+                to: bundle_executor_address,
+                data,
+            }
+                .encode()
+                .into()
         }
     }
 
@@ -194,6 +206,7 @@ mod tests {
     use ethers::types::{Address, U256, U64};
 
     use contracts::i_uniswap_v_2_pair::IUniswapV2Pair;
+    use utils::utils::FlashbotsProvider;
 
     use crate::pool_data::factory::FactoryV2;
     use crate::pool_data::pool_data::PoolDataTrait;
@@ -255,10 +268,10 @@ mod tests {
     #[test]
     fn get_amount_out() {
         let pool = create_pool_data();
-        let amount_out = pool.get_amount_out(U256::from(10), true);
+        let amount_out = pool.get_amount_out::<FlashbotsProvider>(U256::from(10), true, None).unwrap();
         assert_eq!(amount_out, U256::from(987158));
 
-        let amount_out = pool.get_amount_out(U256::from(10), false);
+        let amount_out = pool.get_amount_out::<FlashbotsProvider>(U256::from(10), false, None).unwrap();
         assert_eq!(amount_out, U256::zero())
     }
 }

@@ -1,16 +1,21 @@
 use std::sync::Arc;
 
-use ethers::abi::{Error, RawLog};
+use anyhow::anyhow;
+use ethers::abi::{AbiDecode, AbiEncode, Error, RawLog};
 use ethers::contract::{ContractError, EthEvent};
 use ethers::middleware::Middleware;
 use ethers::prelude::{H256, U64};
 use ethers::types::{Address, Bytes, U256};
+use revm::primitives::{address, ruint, ExecutionResult, TransactTo};
+use revm::Evm;
 
 use contracts::i_uniswap_v_3_factory::PoolCreatedFilter;
 use contracts::i_uniswap_v_3_pool::IUniswapV3Pool;
+use contracts::uniswap_v_3_quoter::GetAmountOutCall;
 
 use crate::pool_data::factory::{Factory, FactoryV3};
 use crate::pool_data::pool_data::PoolDataTrait;
+use crate::utils::EthersCacheDB;
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct UniswapV3 {
@@ -99,17 +104,57 @@ impl PoolDataTrait for UniswapV3 {
         self.factory.into()
     }
 
-    fn get_amount_out(&self, _amount_in: U256, _zero_for_one: bool) -> U256 {
-        todo!("V3 amount out not implemented")
+    #[inline]
+    fn get_amount_out<M: Middleware>(
+        &self,
+        amount_in: U256,
+        zero_for_one: bool,
+        cache_db: Option<&mut EthersCacheDB<M>>,
+    ) -> anyhow::Result<U256> {
+        let cache_db = cache_db.expect("Missing cache db");
+        let encoded = GetAmountOutCall {
+            pool: self.pool_address,
+            zero_for_one,
+            amount_in,
+        }
+        .encode();
+
+        let mut evm = Evm::builder()
+            .with_db(cache_db)
+            .modify_tx_env(|tx| {
+                // 0x1 because calling USDC proxy from zero address fails
+                tx.caller = address!("0000000000000000000000000000000000000001");
+                tx.transact_to =
+                    TransactTo::Call(address!("0000000000000000000000000000000000000004"));
+                tx.data = encoded.into();
+                tx.value = ruint::aliases::U256::from(0);
+            })
+            .build();
+
+        let ref_tx = evm.transact().unwrap();
+        let result = ref_tx.result;
+        let output = match result {
+            ExecutionResult::Revert { output, .. } => <(U256, U256)>::decode(output)?,
+            result => {
+                return Err(anyhow!(
+                    "UniswapV3::get_amount_out execution failed: {result:#?}"
+                ))
+            }
+        };
+
+        if zero_for_one {
+            Ok(output.1)
+        } else {
+            Ok(output.0)
+        }
     }
 
-    fn build_swap_calldata<M: Middleware>(
+    fn build_swap_calldata(
         &self,
         _amount_in: U256,
         _amount_out: U256,
         _zero_for_one: bool,
         _data: Bytes,
-        _client: Arc<M>,
         _bundle_executor_address: Address,
     ) -> Bytes {
         todo!("V3 swap calldata not implemented")

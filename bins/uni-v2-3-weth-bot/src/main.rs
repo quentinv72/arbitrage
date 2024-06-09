@@ -19,7 +19,7 @@ use pools_graph::utils::uniswap_v2::{
     UNISWAP_V2_FACTORY, ZEUS_FACTORY,
 };
 use utils::logging::setup_logging;
-use utils::utils::{Setup, Utils};
+use utils::utils::{FlashbotsProvider, Setup, Utils};
 use utils::TOKEN_BLACKLIST;
 
 static V2_FACTORIES: [&Lazy<FactoryV2>; 6] = [
@@ -205,8 +205,12 @@ fn calculate_profit(
     let input_pool = graph.get_pool_data(&path.input_pool_address).unwrap();
     let output_pool = graph.get_pool_data(&path.output_pool_address).unwrap();
     while i < max_amount_in {
-        let a = input_pool.get_amount_out(i, zero_for_one);
-        let b = output_pool.get_amount_out(a, !zero_for_one);
+        let a = input_pool
+            .get_amount_out::<FlashbotsProvider>(i, zero_for_one, None)
+            .unwrap();
+        let b = output_pool
+            .get_amount_out::<FlashbotsProvider>(a, !zero_for_one, None)
+            .unwrap();
         if b > i && b - i > profit {
             amount_in_first = i;
             amount_out_first = a;
@@ -219,7 +223,9 @@ fn calculate_profit(
         let weth_pool = graph.get_pool_data(weth_pool_address).unwrap();
         let (t0, _) = weth_pool.get_tokens();
         let _zero_for_one_weth = t0 == path.input_token;
-        let out = weth_pool.get_amount_out(profit, _zero_for_one_weth);
+        let out = weth_pool
+            .get_amount_out::<FlashbotsProvider>(profit, _zero_for_one_weth, None)
+            .unwrap();
         if out > amount_out_third {
             amount_out_third = out;
             output_address = *weth_pool_address;

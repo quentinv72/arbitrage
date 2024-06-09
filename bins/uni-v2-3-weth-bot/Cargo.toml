@@ -14,6 +14,7 @@ utils.workspace = true
 tokio.workspace = true
 rayon.workspace = true
 ethers-flashbots.workspace = true
+revm.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

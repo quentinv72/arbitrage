@@ -1,8 +1,9 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{black_box, Criterion, criterion_group, criterion_main};
 use ethers::types::{Address, U256, U64};
 
 use pools_graph::pool_data::pool_data::PoolDataTrait;
 use pools_graph::pool_data::uniswap_v2::UniswapV2;
+use utils::utils::FlashbotsProvider;
 
 pub fn uniswap_v2_amount_out(c: &mut Criterion) {
     let v2_pool = UniswapV2::new(
@@ -15,7 +16,7 @@ pub fn uniswap_v2_amount_out(c: &mut Criterion) {
         None,
     );
     c.bench_function("v2_amount_out", |b| {
-        b.iter(|| v2_pool.get_amount_out(black_box(U256::from(210210)), black_box(true)))
+        b.iter(|| v2_pool.get_amount_out::<FlashbotsProvider>(black_box(U256::from(210210)), black_box(true), None))
     });
 }
 
