@@ -4352,12 +4352,14 @@ checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
 name = "utils"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "either",
  "ethers",
  "ethers-flashbots",
  "log",
  "log4rs",
  "once_cell",
+ "thiserror",
  "url",
 ]
 

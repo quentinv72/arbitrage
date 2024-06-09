@@ -4,8 +4,8 @@ use ethers::types::Address;
 use once_cell::sync::Lazy;
 
 pub mod logging;
+pub mod placeholder_middleware;
 pub mod utils;
-mod placeholder_middleware;
 
 pub static TOKEN_BLACKLIST: Lazy<HashSet<Address>> = Lazy::new(|| {
     let mut set = HashSet::new();

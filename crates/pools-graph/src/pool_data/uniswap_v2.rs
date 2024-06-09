@@ -179,8 +179,8 @@ impl PoolDataTrait for UniswapV2 {
                 to: bundle_executor_address,
                 data,
             }
-                .encode()
-                .into()
+            .encode()
+            .into()
         } else {
             SwapCall {
                 amount_0_out: amount_out,
@@ -188,8 +188,8 @@ impl PoolDataTrait for UniswapV2 {
                 to: bundle_executor_address,
                 data,
             }
-                .encode()
-                .into()
+            .encode()
+            .into()
         }
     }
 
@@ -206,7 +206,7 @@ mod tests {
     use ethers::types::{Address, U256, U64};
 
     use contracts::i_uniswap_v_2_pair::IUniswapV2Pair;
-    use utils::utils::FlashbotsProvider;
+    use utils::placeholder_middleware::PlaceholderMiddleware;
 
     use crate::pool_data::factory::FactoryV2;
     use crate::pool_data::pool_data::PoolDataTrait;
@@ -216,7 +216,7 @@ mod tests {
         Provider::<Http>::try_from(
             "https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg",
         )
-            .unwrap()
+        .unwrap()
     }
 
     fn create_pool_data() -> UniswapV2 {
@@ -268,10 +268,14 @@ mod tests {
     #[test]
     fn get_amount_out() {
         let pool = create_pool_data();
-        let amount_out = pool.get_amount_out::<FlashbotsProvider>(U256::from(10), true, None).unwrap();
+        let amount_out = pool
+            .get_amount_out::<PlaceholderMiddleware>(U256::from(10), true, None)
+            .unwrap();
         assert_eq!(amount_out, U256::from(987158));
 
-        let amount_out = pool.get_amount_out::<FlashbotsProvider>(U256::from(10), false, None).unwrap();
+        let amount_out = pool
+            .get_amount_out::<PlaceholderMiddleware>(U256::from(10), false, None)
+            .unwrap();
         assert_eq!(amount_out, U256::zero())
     }
 }

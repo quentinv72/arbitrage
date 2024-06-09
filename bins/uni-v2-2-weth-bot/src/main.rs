@@ -22,7 +22,8 @@ use pools_graph::utils::uniswap_v2::{
     UNISWAP_V2_FACTORY, ZEUS_FACTORY,
 };
 use utils::logging::setup_logging;
-use utils::utils::{FlashbotsProvider, Setup, Utils};
+use utils::placeholder_middleware::PlaceholderMiddleware;
+use utils::utils::{Setup, Utils};
 use utils::TOKEN_BLACKLIST;
 
 static V2_FACTORIES: [&Lazy<FactoryV2>; 6] = [
@@ -237,10 +238,10 @@ fn calculate_profit(
     let output_pair = pools_graph.get_pool_data(output_pair_address).unwrap();
     while i < max_amount_in {
         let a = input_pair
-            .get_amount_out::<FlashbotsProvider>(i, zero_for_one, None)
+            .get_amount_out::<PlaceholderMiddleware>(i, zero_for_one, None)
             .unwrap();
         let b = output_pair
-            .get_amount_out::<FlashbotsProvider>(a, !zero_for_one, None)
+            .get_amount_out::<PlaceholderMiddleware>(a, !zero_for_one, None)
             .unwrap();
         if b > i && b - i > profit {
             amount_in_first = i;
