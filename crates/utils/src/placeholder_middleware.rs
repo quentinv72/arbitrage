@@ -9,10 +9,7 @@ use thiserror::Error;
 pub struct PlaceholderMiddleware;
 
 #[derive(Error, Debug)]
-pub enum PlaceholderMiddlewareError {
-    #[error("")]
-    MiddlewareError,
-}
+pub enum PlaceholderMiddlewareError {}
 
 impl MiddlewareError for PlaceholderMiddlewareError {
     type Inner = Self;
