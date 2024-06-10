@@ -14,6 +14,7 @@ pub mod i_access_control_enumerable;
 pub mod i_cro_defi_swap_callee;
 pub mod i_pancake_callee;
 pub mod i_pancake_v_3_swap_callback;
+pub mod i_quoter_v_2;
 pub mod i_uniswap_v_2_callee;
 pub mod i_uniswap_v_2_factory;
 pub mod i_uniswap_v_2_pair;
