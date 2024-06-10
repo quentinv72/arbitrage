@@ -164,6 +164,7 @@ impl PoolDataTrait for UniswapV2 {
         ))
     }
 
+    #[inline]
     fn build_swap_calldata(
         &self,
         _amount_in: U256,

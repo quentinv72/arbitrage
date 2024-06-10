@@ -33,7 +33,6 @@ pub async fn load_uniswap_v3_pools<M: Middleware + 'static>(
             let mut tasks = Vec::with_capacity(pools.len());
             id_gt.clone_from(&pools.last().unwrap().id);
             for pool in pools {
-                // let factory_clone = factory.clone();
                 let client_clone = Arc::clone(&client);
                 tasks.push(tokio::spawn(async move {
                     UniswapV3::new_from_client(

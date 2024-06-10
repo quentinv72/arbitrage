@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use criterion::{black_box, Criterion, criterion_group, criterion_main};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use ethers::prelude::{Http, Provider};
 use ethers::types::{Address, U256, U64};
 use ethers::utils::Anvil;
