@@ -38,7 +38,8 @@ pub trait PoolDataTrait {
         &self,
         amount_in: U256,
         amount_out: U256,
-        zero_for_one: bool,
+        token_in: Address,
+        token_out: Address,
         data: Bytes,
         bundle_executor_address: Address,
     ) -> Bytes;

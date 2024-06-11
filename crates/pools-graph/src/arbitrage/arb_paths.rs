@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use ethers::providers::Middleware;
@@ -20,7 +21,7 @@ pub struct Arbs<M: Middleware> {
     // Used to invalidate old ArbTx in arb_txs
     last_valid_tx: HashMap<Vec<ArbPool>, U64>,
     // Cache db used by REVM to compute swaps for UniswapV3, etc.
-    cache_db: EthersCacheDB<M>,
+    cache_db: RefCell<EthersCacheDB<M>>,
 }
 
 impl<M: Middleware> Arbs<M> {
@@ -29,7 +30,7 @@ impl<M: Middleware> Arbs<M> {
             paths,
             arb_txs: BinaryHeap::new(),
             last_valid_tx: HashMap::new(),
-            cache_db,
+            cache_db: RefCell::new(cache_db),
         }
     }
 
@@ -42,12 +43,20 @@ impl<M: Middleware> Arbs<M> {
     ) {
         for arb_path in &self.paths {
             let arb_tx = self
-                .compute_arbitrage(&arb_path, pools_graph, max_amount_in, step_size)
+                .compute_arbitrage(&arb_path, pools_graph, max_amount_in, step_size, block_number)
                 .expect("Computed arb shouldn't fail");
-            if arb_tx.estimated_profit() > U256::zero() {
-                self.arb_txs.push(arb_tx);
-                // TODO figure out how to cache value that need to be invaliudated
-                // self.last_valid_tx.insert(arb_path.clone(), block_number);
+            match arb_tx {
+                Some(arb) => {
+                    // add arb tx to heap
+                    self.arb_txs.push(arb);
+                    // invalidate other arb tx on that path from previous blocks that
+                    // may still be on the heap.
+                    self.last_valid_tx.insert(arb_path.to_vec(), block_number);
+                }
+                None => {
+                    // invalidate arb tx that may still be on the heap from previous blocks.
+                    self.last_valid_tx.insert(arb_path.to_vec(), block_number);
+                }
             }
         }
     }
@@ -58,36 +67,56 @@ impl<M: Middleware> Arbs<M> {
         pools_graph: &PoolsGraph,
         max_amount_in: U256,
         step_size: U256,
-    ) -> anyhow::Result<ArbTx> {
-        todo!("Need to refactor ArbTx to support this the ArbPool format")
-    }
+        block_number: U64,
+    ) -> anyhow::Result<Option<ArbTx>> {
+        let mut amount_in = U256::zero();
+        let mut profitable_arbs = None;
+        let mut curr_max_profit = U256::zero();
+        while amount_in <= max_amount_in {
+            // U256 implements Copy
+            let mut prev_amount_in = amount_in;
+            // Vec<(amount_in, amount_out)>
+            let mut tmp_amounts = Vec::new();
+            for arb_pool in arb_path {
+                let pool_data = pools_graph
+                    .get_pool_data(&arb_pool.pool)
+                    .expect("Pool data should not be None");
+                let amount_out = pool_data.get_amount_out::<M>(
+                    amount_in,
+                    arb_pool.token_in,
+                    arb_pool.token_out,
+                    Some(&mut self.cache_db.borrow_mut()),
+                )?;
+                tmp_amounts.push((prev_amount_in, amount_out));
+                prev_amount_in = amount_out;
+            }
 
-    fn get_amount_out(
-        &mut self,
-        amount_in: U256,
-        pools_graph: &PoolsGraph,
-        arb_pool: ArbPool,
-    ) -> anyhow::Result<U256> {
-        let pool_address = arb_pool.pool;
-        let pool_data = pools_graph.get_pool_data(&pool_address).unwrap();
-        pool_data.get_amount_out::<M>(
-            amount_in,
-            arb_pool.token_in,
-            arb_pool.token_out,
-            Some(&mut self.cache_db),
-        )
+            if prev_amount_in > curr_max_profit {
+                curr_max_profit = prev_amount_in;
+                profitable_arbs = Some(ArbTx::new(
+                    arb_path.to_vec(),
+                    tmp_amounts.iter().map(|x| x.0).collect(),
+                    tmp_amounts.iter().map(|x| x.1).collect(),
+                    U256::zero(),
+                    None,
+                    block_number,
+                ))
+            }
+            amount_in += step_size;
+        }
+        Ok(profitable_arbs)
     }
 }
 
 // Represents a pool in an arbitrage path.
-#[derive(Eq, PartialEq, Hash)]
+#[derive(Eq, PartialEq, Hash, Debug, Copy, Clone)]
 pub struct ArbPool {
     // Pool address.
-    pool: Address,
+    pub pool: Address,
     // Input token swap in pool.
-    token_in: Address,
+    pub token_in: Address,
     // Output token for swap in pool.
-    token_out: Address,
+    pub token_out: Address,
 }
 
 // Use to build an update the `paths` in Arbs.
@@ -136,16 +165,17 @@ impl PathsBuilder {
     }
 
     pub fn build(self, pools_graph: &PoolsGraph) -> Vec<Vec<ArbPool>> {
-        let mut results = Vec::new();
-        let start_tokens = match self.input_token {
-            None => pools_graph.get_all_tokens(),
-            Some(val) => vec![val],
-        };
-        // need to use DFS... but how to make it efficient especially in the
-        // case where there are filtered pools
-
-        // let start_tokens =
-        results
+        todo!()
+        // let mut results = Vec::new();
+        // let start_tokens = match self.input_token {
+        //     None => pools_graph.get_all_tokens(),
+        //     Some(val) => vec![val],
+        // };
+        // // need to use DFS... but how to make it efficient especially in the
+        // // case where there are filtered pools
+        //
+        // // let start_tokens =
+        // results
     }
 }
 

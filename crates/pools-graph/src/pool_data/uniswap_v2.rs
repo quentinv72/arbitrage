@@ -171,10 +171,12 @@ impl PoolDataTrait for UniswapV2 {
         &self,
         _amount_in: U256,
         amount_out: U256,
-        zero_for_one: bool,
+        token_in: Address,
+        _token_out: Address,
         data: Bytes,
         bundle_executor_address: Address,
     ) -> Bytes {
+        let zero_for_one = token_in == self.token_0;
         if zero_for_one {
             SwapCall {
                 amount_0_out: U256::zero(),

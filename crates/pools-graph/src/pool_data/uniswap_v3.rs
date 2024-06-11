@@ -178,10 +178,12 @@ impl PoolDataTrait for UniswapV3 {
         &self,
         amount_in: U256,
         _amount_out: U256,
-        zero_for_one: bool,
+        token_in: Address,
+        _token_out: Address,
         data: Bytes,
         bundle_executor_address: Address,
     ) -> Bytes {
+        let zero_for_one = token_in == self.token_0;
         let sqrt_price_limit = if zero_for_one {
             U256::from_dec_str("4295128749").unwrap()
         } else {
