@@ -21,11 +21,13 @@ pub fn uniswap_v2_amount_out(c: &mut Criterion) {
         U64::zero(),
         None,
     );
+    let (token_0, token_1) = v2_pool.get_tokens();
     c.bench_function("v2_amount_out", |b| {
         b.iter(|| {
             v2_pool.get_amount_out::<PlaceholderMiddleware>(
                 black_box(U256::from(210210)),
-                black_box(true),
+                token_0,
+                token_1,
                 None,
             )
         })
@@ -54,6 +56,8 @@ pub fn uniswap_v3_amount_out(c: &mut Criterion) {
         None,
     );
 
+    let (token_0, token_1) = pool.get_tokens();
+
     let ethers_db = EthersDB::new(provider, None).unwrap();
 
     let mut cache_db = CacheDB::new(ethers_db);
@@ -64,7 +68,8 @@ pub fn uniswap_v3_amount_out(c: &mut Criterion) {
         b.iter(|| {
             pool.get_amount_out(
                 black_box(U256::from(1000)),
-                black_box(true),
+                token_0,
+                token_1,
                 Some(&mut cache_db),
             )
         })

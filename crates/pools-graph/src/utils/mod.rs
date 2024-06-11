@@ -1,7 +1,6 @@
 use ethers::providers::Middleware;
 use revm::db::{CacheDB, EthersDB};
 
-pub mod arbitrage;
 pub mod uniswap_v2;
 pub mod uniswap_v3;
 

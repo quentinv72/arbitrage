@@ -19,7 +19,7 @@ use crate::pool_data::pool_data::PoolDataTrait;
 use crate::pools_graph::PoolsGraph;
 
 #[derive(Eq, Debug)]
-pub struct Arbitrage {
+pub struct ArbTx {
     targets: Vec<Address>,
     amounts_in: Vec<U256>,
     amounts_out: Vec<U256>,
@@ -28,25 +28,25 @@ pub struct Arbitrage {
     estimated_profit: U256,
 }
 
-impl PartialEq<Self> for Arbitrage {
+impl PartialEq<Self> for ArbTx {
     fn eq(&self, other: &Self) -> bool {
         self.estimated_profit == other.estimated_profit
     }
 }
 
-impl PartialOrd<Self> for Arbitrage {
+impl PartialOrd<Self> for ArbTx {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for Arbitrage {
+impl Ord for ArbTx {
     fn cmp(&self, other: &Self) -> Ordering {
         self.estimated_profit.cmp(&other.estimated_profit)
     }
 }
 
-impl Arbitrage {
+impl ArbTx {
     pub fn new(
         targets: Vec<Address>,
         amounts_in: Vec<U256>,
@@ -54,13 +54,13 @@ impl Arbitrage {
         zero_for_ones: Vec<bool>,
         amount_to_coinbase: U256,
         profit: Option<U256>,
-    ) -> Arbitrage {
+    ) -> ArbTx {
         let estimated_profit = match profit {
             None => amounts_out.last().unwrap() - amounts_in.first().unwrap(),
             Some(val) => val,
         };
 
-        Arbitrage {
+        ArbTx {
             targets,
             amounts_in,
             amounts_out,
@@ -70,7 +70,7 @@ impl Arbitrage {
         }
     }
 
-    pub fn get_estimated_profit(&self) -> U256 {
+    pub fn estimated_profit(&self) -> U256 {
         self.estimated_profit
     }
 
@@ -264,9 +264,9 @@ mod tests {
     use ethers::prelude::{Http, Provider};
     use ethers::types::{Address, U256, U64};
 
+    use crate::arbitrage::arb_tx::ArbTx;
     use crate::pool_data::uniswap_v2::UniswapV2;
     use crate::pools_graph::PoolsGraph;
-    use crate::utils::arbitrage::Arbitrage;
 
     fn get_graph() -> PoolsGraph {
         let graph = PoolsGraph::default();
@@ -308,7 +308,7 @@ mod tests {
             .unwrap(),
         );
         let graph = get_graph();
-        let arbitrage = Arbitrage {
+        let arbitrage = ArbTx {
             targets: vec![
                 "0x615687F0aC866a61dF6550A17812C71d2635bd91"
                     .parse()

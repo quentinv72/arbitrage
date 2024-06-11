@@ -143,9 +143,11 @@ impl PoolDataTrait for UniswapV2 {
     fn get_amount_out<M: Middleware>(
         &self,
         amount_in: U256,
-        zero_for_one: bool,
+        token_in: Address,
+        _token_out: Address,
         _cache_db: Option<&mut EthersCacheDB<M>>,
     ) -> anyhow::Result<U256> {
+        let zero_for_one = token_in == self.token_0;
         let reserve_in = if zero_for_one {
             self.reserve_0
         } else {
@@ -270,12 +272,22 @@ mod tests {
     fn get_amount_out() {
         let pool = create_pool_data();
         let amount_out = pool
-            .get_amount_out::<PlaceholderMiddleware>(U256::from(10), true, None)
+            .get_amount_out::<PlaceholderMiddleware>(
+                U256::from(10),
+                pool.token_0,
+                pool.token_1,
+                None,
+            )
             .unwrap();
         assert_eq!(amount_out, U256::from(987158));
 
         let amount_out = pool
-            .get_amount_out::<PlaceholderMiddleware>(U256::from(10), false, None)
+            .get_amount_out::<PlaceholderMiddleware>(
+                U256::from(10),
+                pool.token_1,
+                pool.token_0,
+                None,
+            )
             .unwrap();
         assert_eq!(amount_out, U256::zero())
     }

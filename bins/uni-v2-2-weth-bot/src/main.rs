@@ -12,10 +12,10 @@ use log::info;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 
+use pools_graph::arbitrage::arb_tx::ArbTx;
 use pools_graph::pool_data::factory::FactoryV2;
 use pools_graph::pool_data::pool_data::{PoolData, PoolDataTrait};
 use pools_graph::pools_graph::PoolsGraph;
-use pools_graph::utils::arbitrage::Arbitrage;
 use pools_graph::utils::uniswap_v2;
 use pools_graph::utils::uniswap_v2::{
     CRO_DEFI_FACTORY, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY, SUSHISWAP_FACTORY,
@@ -101,7 +101,7 @@ fn try_finding_arbitrage(
     graph: &PoolsGraph,
     input_address: Address,
     output_address: Address,
-) -> Option<Arbitrage> {
+) -> Option<ArbTx> {
     let (input_token_0, _) = graph.get_pool_data(&input_address).unwrap().get_tokens();
     let zero_for_one = input_token_0 == WETH.parse().unwrap();
     let (input_reserve_in, input_reserve_out) =
@@ -123,7 +123,7 @@ fn try_finding_arbitrage(
             zero_for_one,
         );
         if profit > U256::zero() {
-            return Some(Arbitrage::new(
+            return Some(ArbTx::new(
                 vec![input_address, output_address],
                 vec![amount_in_first, amount_out_first],
                 vec![amount_out_first, amount_out_second],
@@ -236,12 +236,20 @@ fn calculate_profit(
     let mut amount_out_second = U256::zero();
     let input_pair = pools_graph.get_pool_data(input_pair_address).unwrap();
     let output_pair = pools_graph.get_pool_data(output_pair_address).unwrap();
+    let (input_token, output_token) = {
+        let (token_0, token_1) = input_pair.get_tokens();
+        if zero_for_one {
+            (token_0, token_1)
+        } else {
+            (token_1, token_0)
+        }
+    };
     while i < max_amount_in {
         let a = input_pair
-            .get_amount_out::<PlaceholderMiddleware>(i, zero_for_one, None)
+            .get_amount_out::<PlaceholderMiddleware>(i, input_token, output_token, None)
             .unwrap();
         let b = output_pair
-            .get_amount_out::<PlaceholderMiddleware>(a, !zero_for_one, None)
+            .get_amount_out::<PlaceholderMiddleware>(a, output_token, input_token, None)
             .unwrap();
         if b > i && b - i > profit {
             amount_in_first = i;
