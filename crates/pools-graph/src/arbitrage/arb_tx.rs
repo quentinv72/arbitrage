@@ -6,8 +6,8 @@ use ethers::abi::{encode, Token};
 use ethers::contract::ContractCall;
 use ethers::prelude::*;
 use ethers::providers::Middleware;
-use ethers::types::{Address, Bytes, U256, U64};
 use ethers::types::transaction::eip2718::TypedTransaction;
+use ethers::types::{Address, Bytes, U256, U64};
 use ethers_flashbots::*;
 use log::{error, info};
 
@@ -181,7 +181,7 @@ impl ArbTx {
                     priority_fee_percentage,
                     block_number,
                 )
-                    .await
+                .await
                 {
                     Ok(_) => (),
                     Err(e) => {
@@ -279,7 +279,7 @@ mod tests {
             Provider::<Http>::try_from(
                 "https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg",
             )
-                .unwrap(),
+            .unwrap(),
         );
         let graph = PoolsGraph::default();
         let token_0 = Address::random();
@@ -295,7 +295,7 @@ mod tests {
             U64::zero(),
             None,
         )
-            .into();
+        .into();
         let pool_2 = UniswapV2::new(
             "0xe6CE0226859f99C095c5b405BF187dC3c55Ab4D8"
                 .parse()
@@ -307,7 +307,7 @@ mod tests {
             U64::zero(),
             None,
         )
-            .into();
+        .into();
         graph.insert(pool_1);
         graph.insert(pool_2);
         let input_arb_pool = ArbPool {

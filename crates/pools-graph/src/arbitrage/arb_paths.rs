@@ -3,6 +3,8 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use ethers::providers::Middleware;
 use ethers::types::{Address, U256, U64};
+use itertools::Itertools;
+use rayon::prelude::*;
 
 use crate::arbitrage::arb_paths::ExchangeType::{UniswapV2, UniswapV3};
 use crate::arbitrage::arb_tx::ArbTx;
@@ -43,7 +45,13 @@ impl<M: Middleware> Arbs<M> {
     ) {
         for arb_path in &self.paths {
             let arb_tx = self
-                .compute_arbitrage(&arb_path, pools_graph, max_amount_in, step_size, block_number)
+                .compute_arbitrage(
+                    &arb_path,
+                    pools_graph,
+                    max_amount_in,
+                    step_size,
+                    block_number,
+                )
                 .expect("Computed arb shouldn't fail");
             match arb_tx {
                 Some(arb) => {
@@ -122,7 +130,7 @@ pub struct ArbPool {
 // Use to build an update the `paths` in Arbs.
 pub struct PathsBuilder {
     // Length of arbitrage path.
-    path_length: u32,
+    path_length: u8,
     // Types of exchanges to target.
     targeted_exchanges: HashSet<ExchangeType>,
     // Token to use as output of arbitrage trade. The input token should be the same.
@@ -134,7 +142,7 @@ pub struct PathsBuilder {
 }
 
 impl PathsBuilder {
-    pub fn path_length(self, val: u32) -> Self {
+    pub fn path_length(self, val: u8) -> Self {
         Self {
             path_length: val,
             ..self
@@ -165,17 +173,91 @@ impl PathsBuilder {
     }
 
     pub fn build(self, pools_graph: &PoolsGraph) -> Vec<Vec<ArbPool>> {
-        todo!()
-        // let mut results = Vec::new();
-        // let start_tokens = match self.input_token {
-        //     None => pools_graph.get_all_tokens(),
-        //     Some(val) => vec![val],
-        // };
-        // // need to use DFS... but how to make it efficient especially in the
-        // // case where there are filtered pools
-        //
-        // // let start_tokens =
-        // results
+        // Requirements
+        // 1. Every pool must be unique in a path
+        // 2. Paths should have length == self.path_length
+        // 3. start of every pool should be either self.input_token or any token in the graph
+        // 4. Every pool must have output token of self.output_token
+        // 5. Targeted exchanges should only be from self.targeted_exchanges
+
+        // Implementation
+        // 1. Get paths from neighbouring tokens
+        // 2. Build Vec<ArbPool> from  (1)
+        // 3. Append (2) to results
+
+        // need to use DFS... but how to make it efficient especially in the
+        // case where there are filtered pools. I can do this later. For now let's implement it
+        let start_tokens = match self.input_token {
+            None => pools_graph.get_all_tokens(),
+            Some(val) => vec![val],
+        };
+
+        let token_paths = self.token_paths(start_tokens, pools_graph);
+        token_paths
+            .par_iter()
+            .map(|path| {
+                // below represents a list of every possible pool for each pair in the
+                // path.
+                path.windows(2)
+                    .map(|tokens| {
+                        let input_token = tokens[0];
+                        let output_token = tokens[1];
+                        pools_graph
+                            .get_pool_addresses(input_token, output_token)
+                            .unwrap()
+                            .iter()
+                            .map(|_pool| ArbPool {
+                                pool: *_pool,
+                                token_in: input_token,
+                                token_out: output_token,
+                            })
+                            .collect()
+                    })
+                    .collect::<Vec<Vec<ArbPool>>>()
+            })
+            .flat_map(|pool_paths| {
+                // TODO Need additional logic here for filtering and uniqueness of paths
+                pool_paths
+                    .iter()
+                    .multi_cartesian_product()
+                    .map(|arb_pool_path| arb_pool_path.iter().map(|x| **x).collect())
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    fn token_paths(
+        &self,
+        start_tokens: Vec<Address>,
+        pools_graph: &PoolsGraph,
+    ) -> HashSet<Vec<Address>> {
+        let mut token_paths = HashSet::new();
+        for start_token in start_tokens {
+            let mut stack = Vec::new();
+            stack.push((start_token, vec![start_token]));
+            while !stack.is_empty() {
+                let (curr_item, curr_path) = stack.pop().unwrap();
+                if curr_path.len() as u8 == self.path_length {
+                    token_paths.insert(curr_path);
+                    continue;
+                }
+                let curr_item_neighbours = pools_graph.get_neighbouring_tokens(&curr_item).unwrap();
+                if curr_path.len() as u8 == (self.path_length - 1) {
+                    if curr_item_neighbours.contains(&self.output_token) {
+                        let mut new_path = curr_path.clone();
+                        new_path.push(self.output_token);
+                        stack.push((self.output_token, new_path))
+                    }
+                    continue;
+                }
+                for neighbour in curr_item_neighbours.iter() {
+                    let mut new_path = curr_path.clone();
+                    new_path.push(*neighbour);
+                    stack.push((*neighbour, new_path));
+                }
+            }
+        }
+        token_paths
     }
 }
 
