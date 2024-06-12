@@ -131,8 +131,6 @@ pub struct ArbPool {
 pub struct PathsBuilder {
     // Length of arbitrage path.
     path_length: u8,
-    // Types of exchanges to target.
-    targeted_exchanges: HashSet<ExchangeType>,
     // Token to use as output of arbitrage trade. The input token should be the same.
     output_token: Address,
     // Optional input token to the arb path
@@ -148,12 +146,7 @@ impl PathsBuilder {
             ..self
         }
     }
-    pub fn targeted_exchanges(self, val: HashSet<ExchangeType>) -> Self {
-        Self {
-            targeted_exchanges: val,
-            ..self
-        }
-    }
+
     pub fn output_token(self, val: Address) -> Self {
         Self {
             output_token: val,
@@ -180,13 +173,6 @@ impl PathsBuilder {
         // 4. Every pool must have output token of self.output_token
         // 5. Targeted exchanges should only be from self.targeted_exchanges
 
-        // Implementation
-        // 1. Get paths from neighbouring tokens
-        // 2. Build Vec<ArbPool> from  (1)
-        // 3. Append (2) to results
-
-        // need to use DFS... but how to make it efficient especially in the
-        // case where there are filtered pools. I can do this later. For now let's implement it
         let start_tokens = match self.input_token {
             None => pools_graph.get_all_tokens(),
             Some(val) => vec![val],
@@ -215,12 +201,15 @@ impl PathsBuilder {
                     })
                     .collect::<Vec<Vec<ArbPool>>>()
             })
+            // Take cartesian product of pools associated with each pair in a token path and filter them.
             .flat_map(|pool_paths| {
-                // TODO Need additional logic here for filtering and uniqueness of paths
                 pool_paths
                     .iter()
                     .multi_cartesian_product()
                     .map(|arb_pool_path| arb_pool_path.iter().map(|x| **x).collect())
+                    .filter(|arb_pools| self.filter_targeted_pools(arb_pools))
+                    // TBD whether this uniqueness is needed
+                    .filter(|arb_pools| Self::path_uniqueness(arb_pools))
                     .collect::<Vec<_>>()
             })
             .collect()
@@ -258,6 +247,30 @@ impl PathsBuilder {
             }
         }
         token_paths
+    }
+
+    fn filter_targeted_pools(&self, arb_pools: &Vec<ArbPool>) -> bool {
+        if self.pools.is_empty() {
+            return true;
+        }
+        for pool in arb_pools {
+            if self.pools.contains(&pool.pool) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn path_uniqueness(arb_pools: &Vec<ArbPool>) -> bool {
+        let mut seen = HashSet::new();
+        for pool in arb_pools {
+            if seen.contains(&pool.pool) {
+                return false;
+            } else {
+                seen.insert(pool.pool);
+            }
+        }
+        return true;
     }
 }
 
