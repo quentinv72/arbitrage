@@ -5,9 +5,8 @@ use std::str::FromStr;
 
 use ethers::providers::Middleware;
 use ethers::types::{Address, U256, U64};
-use itertools::Itertools;
-use rayon::prelude::*;
-use revm::primitives::{AccountInfo, alloy_primitives, Bytecode, ruint};
+use revm::precompile::B256;
+use revm::primitives::{alloy_primitives, ruint, AccountInfo, Bytecode, KECCAK_EMPTY};
 
 use crate::arbitrage::arb_tx::ArbTx;
 use crate::pool_data::pool_data::PoolDataTrait;
@@ -39,12 +38,21 @@ impl<M: Middleware> Arbs<M> {
         }
     }
 
-
     // This method should be called at the end of each block to ensure that
     // the cached values from the current block aren't used for the next block.
+    // Based on the CacheDb::new method implementation.
     pub fn clear_cache(&mut self) {
-        let new_cache_db = EthersCacheDB::new(self.cache_db.borrow().db.clone());
-        self.cache_db = RefCell::new(new_cache_db);
+        self.cache_db.borrow_mut().contracts.clear();
+        self.cache_db.borrow_mut().accounts.clear();
+        self.cache_db.borrow_mut().block_hashes.clear();
+        self.cache_db
+            .borrow_mut()
+            .contracts
+            .insert(KECCAK_EMPTY, Bytecode::default());
+        self.cache_db
+            .borrow_mut()
+            .contracts
+            .insert(B256::ZERO, Bytecode::default());
     }
 
     // Should be called at the start of each block to ensure that the
@@ -69,6 +77,9 @@ impl<M: Middleware> Arbs<M> {
         num_steps: U256,
         block_number: U64,
     ) {
+        // this can probably be parallelized by making clones of cache db for each arb path..
+        // This might be quicker but not sure.
+        // Needs to be benchmarked.
         for arb_path in &self.paths {
             let arb_tx = self
                 .compute_arbitrage(

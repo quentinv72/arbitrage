@@ -29,13 +29,13 @@ pub(crate) const QUOTER_BYTECODE: &str = include_str!("UniswapV3Quoter.hex");
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct UniswapV3 {
-    pub(crate) pool_address: Address,
-    pub(crate) sqrt_price_x_96: U256,
-    pub(crate) token_0: Address,
-    pub(crate) token_1: Address,
-    pub(crate) fee_tier: u32,
-    pub(crate) block_last_updates: U64,
-    pub(crate) factory: FactoryV3,
+    pub pool_address: Address,
+    pub sqrt_price_x_96: U256,
+    pub token_0: Address,
+    pub token_1: Address,
+    pub fee_tier: u32,
+    pub block_last_updates: U64,
+    pub factory: FactoryV3,
 }
 
 impl UniswapV3 {

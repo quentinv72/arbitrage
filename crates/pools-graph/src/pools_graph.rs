@@ -120,7 +120,7 @@ impl PoolsGraph {
         self.pool_address_to_pool_data.try_get_mut(pool_address)
     }
 
-    pub(crate) fn insert(&self, pool_data: PoolData) {
+    pub fn insert(&self, pool_data: PoolData) {
         let factory = pool_data.get_factory();
         let (token_0, token_1) = pool_data.get_tokens();
         let pool_address = pool_data.get_pool_address();
