@@ -17,13 +17,13 @@ use crate::utils::EthersCacheDB;
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct UniswapV2 {
-    pair_address: Address,
-    token_0: Address,
-    reserve_0: u128,
-    token_1: Address,
-    reserve_1: u128,
-    block_last_updated: U64,
-    factory: FactoryV2,
+    pub pair_address: Address,
+    pub token_0: Address,
+    pub reserve_0: u128,
+    pub token_1: Address,
+    pub reserve_1: u128,
+    pub block_last_updated: U64,
+    pub factory: FactoryV2,
 }
 
 impl UniswapV2 {
@@ -143,9 +143,11 @@ impl PoolDataTrait for UniswapV2 {
     fn get_amount_out<M: Middleware>(
         &self,
         amount_in: U256,
-        zero_for_one: bool,
+        token_in: Address,
+        _token_out: Address,
         _cache_db: Option<&mut EthersCacheDB<M>>,
     ) -> anyhow::Result<U256> {
+        let zero_for_one = token_in == self.token_0;
         let reserve_in = if zero_for_one {
             self.reserve_0
         } else {
@@ -169,10 +171,12 @@ impl PoolDataTrait for UniswapV2 {
         &self,
         _amount_in: U256,
         amount_out: U256,
-        zero_for_one: bool,
+        token_in: Address,
+        _token_out: Address,
         data: Bytes,
         bundle_executor_address: Address,
     ) -> Bytes {
+        let zero_for_one = token_in == self.token_0;
         if zero_for_one {
             SwapCall {
                 amount_0_out: U256::zero(),
@@ -270,12 +274,22 @@ mod tests {
     fn get_amount_out() {
         let pool = create_pool_data();
         let amount_out = pool
-            .get_amount_out::<PlaceholderMiddleware>(U256::from(10), true, None)
+            .get_amount_out::<PlaceholderMiddleware>(
+                U256::from(10),
+                pool.token_0,
+                pool.token_1,
+                None,
+            )
             .unwrap();
         assert_eq!(amount_out, U256::from(987158));
 
         let amount_out = pool
-            .get_amount_out::<PlaceholderMiddleware>(U256::from(10), false, None)
+            .get_amount_out::<PlaceholderMiddleware>(
+                U256::from(10),
+                pool.token_1,
+                pool.token_0,
+                None,
+            )
             .unwrap();
         assert_eq!(amount_out, U256::zero())
     }

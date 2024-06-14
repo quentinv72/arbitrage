@@ -9,10 +9,10 @@ use ethers::types::{Address, U256, U64};
 use log::info;
 use rayon::prelude::*;
 
+use pools_graph::arbitrage::arb_tx::ArbTx;
 use pools_graph::pool_data::factory::FactoryV2;
 use pools_graph::pool_data::pool_data::{PoolData, PoolDataTrait};
 use pools_graph::pools_graph::PoolsGraph;
-use pools_graph::utils::arbitrage::Arbitrage;
 use pools_graph::utils::uniswap_v2;
 use pools_graph::utils::uniswap_v2::{
     CRO_DEFI_FACTORY, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY, SUSHISWAP_FACTORY,
@@ -166,7 +166,7 @@ async fn update_reserves<M: Middleware>(
     Ok(())
 }
 
-fn try_finding_arbitrage(graph: &PoolsGraph, path: &Path) -> Option<Arbitrage> {
+fn try_finding_arbitrage(graph: &PoolsGraph, path: &Path) -> Option<ArbTx> {
     let (input_token_0, _) = graph
         .get_pool_data(&path.input_pool_address)
         .unwrap()
@@ -193,7 +193,7 @@ fn calculate_profit(
     path: &Path,
     max_amount_in: U256,
     zero_for_one: bool,
-) -> Option<Arbitrage> {
+) -> Option<ArbTx> {
     let mut i = U256::one();
     let step_size = max(U256::one(), max_amount_in.div(U256::from(NUMBER_OF_STEPS)));
     let mut profit = U256::zero();
@@ -205,12 +205,20 @@ fn calculate_profit(
     let mut zero_for_one_weth = true;
     let input_pool = graph.get_pool_data(&path.input_pool_address).unwrap();
     let output_pool = graph.get_pool_data(&path.output_pool_address).unwrap();
+    let (input_token, output_token) = {
+        let (token_0, token_1) = input_pool.get_tokens();
+        if zero_for_one {
+            (token_0, token_1)
+        } else {
+            (token_1, token_0)
+        }
+    };
     while i < max_amount_in {
         let a = input_pool
-            .get_amount_out::<PlaceholderMiddleware>(i, zero_for_one, None)
+            .get_amount_out::<PlaceholderMiddleware>(i, input_token, output_token, None)
             .unwrap();
         let b = output_pool
-            .get_amount_out::<PlaceholderMiddleware>(a, !zero_for_one, None)
+            .get_amount_out::<PlaceholderMiddleware>(a, output_token, input_token, None)
             .unwrap();
         if b > i && b - i > profit {
             amount_in_first = i;
@@ -222,11 +230,17 @@ fn calculate_profit(
     }
     for weth_pool_address in &path.weth_output_pools {
         let weth_pool = graph.get_pool_data(weth_pool_address).unwrap();
-        let (t0, _) = weth_pool.get_tokens();
+        let (t0, t1) = weth_pool.get_tokens();
         let _zero_for_one_weth = t0 == path.input_token;
-        let out = weth_pool
-            .get_amount_out::<PlaceholderMiddleware>(profit, _zero_for_one_weth, None)
-            .unwrap();
+        let out = if zero_for_one_weth {
+            weth_pool
+                .get_amount_out::<PlaceholderMiddleware>(profit, t0, t1, None)
+                .unwrap()
+        } else {
+            weth_pool
+                .get_amount_out::<PlaceholderMiddleware>(profit, t1, t0, None)
+                .unwrap()
+        };
         if out > amount_out_third {
             amount_out_third = out;
             output_address = *weth_pool_address;
@@ -234,7 +248,7 @@ fn calculate_profit(
         }
     }
     if amount_out_third > U256::zero() {
-        return Some(Arbitrage::new(
+        return Some(ArbTx::new(
             vec![
                 path.input_pool_address,
                 path.output_pool_address,

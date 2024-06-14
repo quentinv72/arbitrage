@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::collections::HashSet;
 use std::ops::{Div, Mul};
 use std::sync::Arc;
 
@@ -10,73 +9,74 @@ use ethers::providers::Middleware;
 use ethers::types::transaction::eip2718::TypedTransaction;
 use ethers::types::{Address, Bytes, U256, U64};
 use ethers_flashbots::*;
-use log::{error, info, warn};
+use log::{error, info};
 
 use contracts::qv_executor::QVExecutor;
 use utils::utils::FlashbotsProvider;
 
+use crate::arbitrage::arb_paths::ArbPool;
 use crate::pool_data::pool_data::PoolDataTrait;
 use crate::pools_graph::PoolsGraph;
 
 #[derive(Eq, Debug)]
-pub struct Arbitrage {
-    targets: Vec<Address>,
+pub struct ArbTx {
+    targets: Vec<ArbPool>,
     amounts_in: Vec<U256>,
     amounts_out: Vec<U256>,
-    zero_for_ones: Vec<bool>,
     amount_to_coinbase: U256,
     estimated_profit: U256,
+    creation_block_number: U64,
 }
 
-impl PartialEq<Self> for Arbitrage {
+impl PartialEq<Self> for ArbTx {
     fn eq(&self, other: &Self) -> bool {
         self.estimated_profit == other.estimated_profit
     }
 }
 
-impl PartialOrd<Self> for Arbitrage {
+impl PartialOrd<Self> for ArbTx {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for Arbitrage {
+impl Ord for ArbTx {
     fn cmp(&self, other: &Self) -> Ordering {
         self.estimated_profit.cmp(&other.estimated_profit)
     }
 }
 
-impl Arbitrage {
+impl ArbTx {
     pub fn new(
-        targets: Vec<Address>,
+        targets: Vec<ArbPool>,
         amounts_in: Vec<U256>,
         amounts_out: Vec<U256>,
-        zero_for_ones: Vec<bool>,
         amount_to_coinbase: U256,
         profit: Option<U256>,
-    ) -> Arbitrage {
+        creation_block_number: U64,
+    ) -> ArbTx {
         let estimated_profit = match profit {
             None => amounts_out.last().unwrap() - amounts_in.first().unwrap(),
             Some(val) => val,
         };
 
-        Arbitrage {
+        ArbTx {
             targets,
             amounts_in,
             amounts_out,
-            zero_for_ones,
             amount_to_coinbase,
             estimated_profit,
+            creation_block_number,
         }
     }
 
-    pub fn get_estimated_profit(&self) -> U256 {
+    pub fn estimated_profit(&self) -> U256 {
         self.estimated_profit
     }
-
-    pub fn get_pair_addresses(&self) -> &Vec<Address> {
-        &self.targets
-    }
+    //
+    // pub fn get_pair_addresses(&self) -> &Vec<Address> {
+    //     &self.targets.iter().map(|x| x.pool).collect()
+    // }
 
     fn build_transaction<M: Middleware>(
         &self,
@@ -91,30 +91,32 @@ impl Arbitrage {
             Bytes::from(Vec::new()),
         );
         for i in (1..self.targets.len()).rev() {
-            let pool_address = self.targets[i];
+            let pool_address = self.targets[i].pool;
             let pool = pools_graph.get_pool_data(&pool_address).unwrap();
             let swap_data = pool.build_swap_calldata(
                 self.amounts_in[i],
                 self.amounts_out[i],
-                self.zero_for_ones[i],
+                self.targets[i].token_in,
+                self.targets[i].token_out,
                 next_call,
                 bundle_executor_address,
             );
-            next_call = Self::build_data(self.amounts_in[i - 1], self.targets[i], swap_data);
+            next_call = Self::build_data(self.amounts_in[i - 1], pool_address, swap_data);
         }
 
-        let start_pool_addr = self.targets[0];
+        let start_pool_addr = self.targets[0].pool;
         let start_pool = pools_graph.get_pool_data(&start_pool_addr).unwrap();
         next_call = start_pool.build_swap_calldata(
             self.amounts_in[0],
             self.amounts_out[0],
-            self.zero_for_ones[0],
+            self.targets[0].token_in,
+            self.targets[0].token_out,
             next_call,
             bundle_executor_address,
         );
         let bundle_executor_contract = QVExecutor::new(bundle_executor_address, client);
         bundle_executor_contract.execute_bundle(
-            self.targets[0],
+            start_pool_addr,
             self.amount_to_coinbase,
             output_token,
             next_call,
@@ -128,7 +130,7 @@ impl Arbitrage {
         output_token: Address,
         bundle_executor_address: Address,
         next_block_base_fee: U256,
-        has_reverted: &mut HashSet<Vec<Address>>,
+        // has_reverted: &mut HashSet<Vec<Address>>,
         client: Arc<FlashbotsProvider>,
         priority_fee_percentage: u32,
         block_number: U64,
@@ -142,20 +144,22 @@ impl Arbitrage {
 
         let gas_estimate_opt = match cc.estimate_gas().await {
             Ok(est) => Some(est),
-            Err(e) => {
-                if e.is_revert() {
-                    if !has_reverted.contains(self.get_pair_addresses()) {
-                        warn!(
-                            "Gas estimate reverted for pairs {:#?} \nThe calldata {:#?}",
-                            self.get_pair_addresses(),
-                            cc.tx.data()
-                        );
-                        has_reverted.insert(self.get_pair_addresses().to_vec());
-                    }
-                } else {
-                    panic!("Got a strange error {e}")
-                }
+            Err(_) => {
+                // TODO figure out how to filter out bad tokens
                 None
+                // if e.is_revert() {
+                //     if !has_reverted.contains(self.get_pair_addresses()) {
+                //         warn!(
+                //             "Gas estimate reverted for pairs {:#?} \nThe calldata {:#?}",
+                //             self.get_pair_addresses(),
+                //             cc.tx.data()
+                //         );
+                //         has_reverted.insert(self.get_pair_addresses().to_vec());
+                //     }
+                // } else {
+                //     panic!("Got a strange error {e}")
+                // }
+                // None
             }
         };
 
@@ -264,40 +268,10 @@ mod tests {
     use ethers::prelude::{Http, Provider};
     use ethers::types::{Address, U256, U64};
 
+    use crate::arbitrage::arb_paths::ArbPool;
+    use crate::arbitrage::arb_tx::ArbTx;
     use crate::pool_data::uniswap_v2::UniswapV2;
     use crate::pools_graph::PoolsGraph;
-    use crate::utils::arbitrage::Arbitrage;
-
-    fn get_graph() -> PoolsGraph {
-        let graph = PoolsGraph::default();
-        let pool_1 = UniswapV2::new(
-            "0x615687F0aC866a61dF6550A17812C71d2635bd91"
-                .parse()
-                .unwrap(),
-            Address::random(),
-            10,
-            Address::random(),
-            10,
-            U64::zero(),
-            None,
-        )
-        .into();
-        let pool_2 = UniswapV2::new(
-            "0xe6CE0226859f99C095c5b405BF187dC3c55Ab4D8"
-                .parse()
-                .unwrap(),
-            Address::random(),
-            10,
-            Address::random(),
-            10,
-            U64::zero(),
-            None,
-        )
-        .into();
-        graph.insert(pool_1);
-        graph.insert(pool_2);
-        graph
-    }
 
     #[test]
     fn build_transaction() {
@@ -307,16 +281,52 @@ mod tests {
             )
             .unwrap(),
         );
-        let graph = get_graph();
-        let arbitrage = Arbitrage {
-            targets: vec![
-                "0x615687F0aC866a61dF6550A17812C71d2635bd91"
-                    .parse()
-                    .unwrap(),
-                "0xe6CE0226859f99C095c5b405BF187dC3c55Ab4D8"
-                    .parse()
-                    .unwrap(),
-            ],
+        let graph = PoolsGraph::default();
+        let token_0 = Address::random();
+        let token_1 = Address::random();
+        let pool_1 = UniswapV2::new(
+            "0x615687F0aC866a61dF6550A17812C71d2635bd91"
+                .parse()
+                .unwrap(),
+            token_0,
+            10,
+            token_1,
+            10,
+            U64::zero(),
+            None,
+        )
+        .into();
+        let pool_2 = UniswapV2::new(
+            "0xe6CE0226859f99C095c5b405BF187dC3c55Ab4D8"
+                .parse()
+                .unwrap(),
+            token_0,
+            10,
+            token_1,
+            10,
+            U64::zero(),
+            None,
+        )
+        .into();
+        graph.insert(pool_1);
+        graph.insert(pool_2);
+        let input_arb_pool = ArbPool {
+            pool: "0x615687F0aC866a61dF6550A17812C71d2635bd91"
+                .parse()
+                .unwrap(),
+            token_in: token_1,
+            token_out: token_0,
+        };
+
+        let output_arb_pool = ArbPool {
+            pool: "0xe6CE0226859f99C095c5b405BF187dC3c55Ab4D8"
+                .parse()
+                .unwrap(),
+            token_in: token_0,
+            token_out: token_1,
+        };
+        let arbitrage = ArbTx {
+            targets: vec![input_arb_pool, output_arb_pool],
             amounts_in: vec![
                 U256::from_dec_str("6314425151630").unwrap(),
                 U256::from_dec_str("15842350854553147119").unwrap(),
@@ -325,9 +335,9 @@ mod tests {
                 U256::from_dec_str("15842350854553147119").unwrap(),
                 U256::from_dec_str("441375928197785").unwrap(),
             ],
-            zero_for_ones: vec![false, true],
             amount_to_coinbase: U256::zero(),
             estimated_profit: U256::zero(),
+            creation_block_number: U64::zero(),
         };
         let bundle_executor_address = "0x2f5A6dd5bCB5ba085e5f6e2DBF43a0BeA4b6fdfC"
             .parse()

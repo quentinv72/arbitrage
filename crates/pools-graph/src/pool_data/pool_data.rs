@@ -27,7 +27,8 @@ pub trait PoolDataTrait {
     fn get_amount_out<M: Middleware>(
         &self,
         amount_in: U256,
-        zero_for_one: bool,
+        token_in: Address,
+        token_out: Address,
         cache_db: Option<&mut EthersCacheDB<M>>,
     ) -> anyhow::Result<U256>;
     fn get_factory(&self) -> Factory;
@@ -37,7 +38,8 @@ pub trait PoolDataTrait {
         &self,
         amount_in: U256,
         amount_out: U256,
-        zero_for_one: bool,
+        token_in: Address,
+        token_out: Address,
         data: Bytes,
         bundle_executor_address: Address,
     ) -> Bytes;

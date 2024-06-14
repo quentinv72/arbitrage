@@ -120,7 +120,7 @@ impl PoolsGraph {
         self.pool_address_to_pool_data.try_get_mut(pool_address)
     }
 
-    pub(crate) fn insert(&self, pool_data: PoolData) {
+    pub fn insert(&self, pool_data: PoolData) {
         let factory = pool_data.get_factory();
         let (token_0, token_1) = pool_data.get_tokens();
         let pool_address = pool_data.get_pool_address();
@@ -131,6 +131,13 @@ impl PoolsGraph {
         if !self.factories.contains_key(&factory.get_address()) {
             self.factories.insert(factory.get_address(), factory);
         }
+    }
+
+    pub(crate) fn get_all_tokens(&self) -> Vec<Address> {
+        self.neighbouring_erc20_tokens
+            .iter()
+            .map(|x| *x.key())
+            .collect()
     }
 
     fn insert_tokens(&self, pool_address: Address, token_0: Address, token_1: Address) {
