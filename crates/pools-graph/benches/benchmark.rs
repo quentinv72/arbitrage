@@ -83,8 +83,8 @@ pub fn bench_uniswap_v3_amount_out(c: &mut Criterion) {
     });
 }
 
-fn bench_compute_all_arbitrage(c: &mut Criterion) {
-    let mut group = c.benchmark_group("compute_all_arbitrage");
+fn bench_compute_all_arbitrage_2_v3_pools(c: &mut Criterion) {
+    let mut group = c.benchmark_group("compute_all_arbitrage_2_v3_pools");
     group.sample_size(100);
     let (mut arb, graph) = setup_arb();
     for num_of_steps in [
@@ -149,20 +149,7 @@ fn setup_arb() -> (Arbs<Provider<Http>>, PoolsGraph) {
         },
     ];
 
-    let arb_path_2 = vec![
-        ArbPool {
-            pool: uniswap_v3_pool.pool_address,
-            token_in: uniswap_v3_pool.token_1,
-            token_out: uniswap_v3_pool.token_0,
-        },
-        ArbPool {
-            pool: uniswap_v3_pool.pool_address,
-            token_in: uniswap_v3_pool.token_0,
-            token_out: uniswap_v3_pool.token_1,
-        },
-    ];
-
-    let mut arbs = Arbs::new(vec![arb_path_1, arb_path_2], cache_db);
+    let mut arbs = Arbs::new(vec![arb_path_1], cache_db);
     (arbs, pools_graph)
 }
 
@@ -170,6 +157,6 @@ criterion_group!(
     benches,
     bench_uniswap_v2_amount_out,
     bench_uniswap_v3_amount_out,
-    bench_compute_all_arbitrage,
+    bench_compute_all_arbitrage_2_v3_pools,
 );
 criterion_main!(benches);
