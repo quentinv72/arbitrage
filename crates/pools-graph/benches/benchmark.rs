@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{black_box, Criterion, criterion_group, criterion_main};
 use ethers::prelude::{Http, Provider};
 use ethers::types::{Address, U256, U64};
 use ethers::utils::Anvil;
@@ -75,6 +75,9 @@ pub fn uniswap_v3_amount_out(c: &mut Criterion) {
         })
     });
 }
+
+
+
 
 criterion_group!(benches, uniswap_v2_amount_out, uniswap_v3_amount_out);
 criterion_main!(benches);

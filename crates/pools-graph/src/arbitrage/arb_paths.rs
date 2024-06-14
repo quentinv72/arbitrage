@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::{BinaryHeap, HashMap};
 use std::ops::Div;
 use std::str::FromStr;
 
@@ -7,11 +7,10 @@ use ethers::providers::Middleware;
 use ethers::types::{Address, U256, U64};
 use itertools::Itertools;
 use rayon::prelude::*;
-use revm::primitives::{alloy_primitives, ruint, AccountInfo, Bytecode};
+use revm::primitives::{AccountInfo, alloy_primitives, Bytecode, ruint};
 
-use crate::arbitrage::arb_paths::ExchangeType::{UniswapV2, UniswapV3};
 use crate::arbitrage::arb_tx::ArbTx;
-use crate::pool_data::pool_data::{PoolData, PoolDataTrait};
+use crate::pool_data::pool_data::PoolDataTrait;
 use crate::pool_data::uniswap_v3::{QUOTER_BYTECODE, QUOTER_MOCK_ADDRESS};
 use crate::pools_graph::PoolsGraph;
 use crate::utils::EthersCacheDB;
@@ -38,6 +37,29 @@ impl<M: Middleware> Arbs<M> {
             last_valid_tx: HashMap::new(),
             cache_db: RefCell::new(cache_db),
         }
+    }
+
+
+    // This method should be called at the end of each block to ensure that
+    // the cached values from the current block aren't used for the next block.
+    pub fn clear_cache(&mut self) {
+        let new_cache_db = EthersCacheDB::new(self.cache_db.borrow().db.clone());
+        self.cache_db = RefCell::new(new_cache_db);
+    }
+
+    // Should be called at the start of each block to ensure that the
+    pub fn load_uniswap_v3_quoter_bytecode(&mut self) {
+        let bytes = alloy_primitives::Bytes::from_str(QUOTER_BYTECODE).unwrap();
+        let bytecode = Bytecode::new_raw(bytes);
+        self.cache_db.borrow_mut().insert_account_info(
+            QUOTER_MOCK_ADDRESS,
+            AccountInfo {
+                balance: ruint::aliases::U256::from(0),
+                nonce: 1,
+                code_hash: bytecode.hash_slow(),
+                code: Some(bytecode),
+            },
+        )
     }
 
     pub fn compute_all_arbitrages(
@@ -71,20 +93,6 @@ impl<M: Middleware> Arbs<M> {
                 }
             }
         }
-    }
-
-    pub fn load_uniswap_v3_quoter_bytecode(&mut self) {
-        let bytes = alloy_primitives::Bytes::from_str(QUOTER_BYTECODE).unwrap();
-        let bytecode = Bytecode::new_raw(bytes);
-        self.cache_db.borrow_mut().insert_account_info(
-            QUOTER_MOCK_ADDRESS,
-            AccountInfo {
-                balance: ruint::aliases::U256::from(0),
-                nonce: 1,
-                code_hash: bytecode.hash_slow(),
-                code: Some(bytecode),
-            },
-        )
     }
 
     fn compute_arbitrage(
@@ -242,165 +250,167 @@ pub struct ArbPool {
     pub token_out: Address,
 }
 
+// ####### UNTESTED and NOT USING FOR NOW #######
+// Reason: Too complex, seems simpler to write custom functions for each bot....
 // Use to build an update the `paths` in Arbs.
-pub struct PathsBuilder {
-    // Length of arbitrage path.
-    path_length: u8,
-    // Token to use as output of arbitrage trade. The input token should be the same.
-    output_token: Address,
-    // Optional input token to the arb path
-    input_token: Option<Address>,
-    // Optional set of pools to filter on.
-    pools: HashSet<Address>,
-}
-
-impl PathsBuilder {
-    pub fn path_length(self, val: u8) -> Self {
-        Self {
-            path_length: val,
-            ..self
-        }
-    }
-
-    pub fn output_token(self, val: Address) -> Self {
-        Self {
-            output_token: val,
-            ..self
-        }
-    }
-
-    pub fn pool(self, val: HashSet<Address>) -> Self {
-        Self { pools: val, ..self }
-    }
-
-    pub fn input_token(self, val: Address) -> Self {
-        Self {
-            input_token: Some(val),
-            ..self
-        }
-    }
-
-    pub fn build(self, pools_graph: &PoolsGraph) -> Vec<Vec<ArbPool>> {
-        // Requirements
-        // 1. Every pool must be unique in a path
-        // 2. Paths should have length == self.path_length
-        // 3. start of every pool should be either self.input_token or any token in the graph
-        // 4. Every pool must have output token of self.output_token
-        // 5. Targeted exchanges should only be from self.targeted_exchanges
-
-        let start_tokens = match self.input_token {
-            None => pools_graph.get_all_tokens(),
-            Some(val) => vec![val],
-        };
-
-        let token_paths = self.token_paths(start_tokens, pools_graph);
-        token_paths
-            .par_iter()
-            .map(|path| {
-                // below represents a list of every possible pool for each pair in the
-                // path.
-                path.windows(2)
-                    .map(|tokens| {
-                        let input_token = tokens[0];
-                        let output_token = tokens[1];
-                        pools_graph
-                            .get_pool_addresses(input_token, output_token)
-                            .unwrap()
-                            .iter()
-                            .map(|_pool| ArbPool {
-                                pool: *_pool,
-                                token_in: input_token,
-                                token_out: output_token,
-                            })
-                            .collect()
-                    })
-                    .collect::<Vec<Vec<ArbPool>>>()
-            })
-            // Take cartesian product of pools associated with each pair in a token path and filter them.
-            .flat_map(|pool_paths| {
-                pool_paths
-                    .iter()
-                    .multi_cartesian_product()
-                    .map(|arb_pool_path| arb_pool_path.iter().map(|x| **x).collect())
-                    .filter(|arb_pools| self.filter_targeted_pools(arb_pools))
-                    // TBD whether this uniqueness is needed
-                    .filter(Self::path_uniqueness)
-                    .collect::<Vec<_>>()
-            })
-            .collect()
-    }
-
-    fn token_paths(
-        &self,
-        start_tokens: Vec<Address>,
-        pools_graph: &PoolsGraph,
-    ) -> HashSet<Vec<Address>> {
-        let mut token_paths = HashSet::new();
-        for start_token in start_tokens {
-            let mut stack = Vec::new();
-            stack.push((start_token, vec![start_token]));
-            while let Some((curr_item, curr_path)) = stack.pop() {
-                if curr_path.len() as u8 == self.path_length {
-                    token_paths.insert(curr_path);
-                    continue;
-                }
-                let curr_item_neighbours = pools_graph.get_neighbouring_tokens(&curr_item).unwrap();
-                if curr_path.len() as u8 == (self.path_length - 1) {
-                    if curr_item_neighbours.contains(&self.output_token) {
-                        let mut new_path = curr_path.clone();
-                        new_path.push(self.output_token);
-                        stack.push((self.output_token, new_path))
-                    }
-                    continue;
-                }
-                for neighbour in curr_item_neighbours.iter() {
-                    let mut new_path = curr_path.clone();
-                    new_path.push(*neighbour);
-                    stack.push((*neighbour, new_path));
-                }
-            }
-        }
-        token_paths
-    }
-
-    fn filter_targeted_pools(&self, arb_pools: &Vec<ArbPool>) -> bool {
-        if self.pools.is_empty() {
-            return true;
-        }
-        for pool in arb_pools {
-            if self.pools.contains(&pool.pool) {
-                return true;
-            }
-        }
-        false
-    }
-
-    fn path_uniqueness(arb_pools: &Vec<ArbPool>) -> bool {
-        let mut seen = HashSet::new();
-        for pool in arb_pools {
-            if seen.contains(&pool.pool) {
-                return false;
-            } else {
-                seen.insert(pool.pool);
-            }
-        }
-        true
-    }
-}
-
-pub enum ExchangeType {
-    UniswapV2,
-    UniswapV3,
-}
-
-impl From<PoolData> for ExchangeType {
-    fn from(value: PoolData) -> Self {
-        match value {
-            PoolData::UniswapV2(_) => UniswapV2,
-            PoolData::UniswapV3(_) => UniswapV3,
-        }
-    }
-}
-
-#[cfg(test)]
-mod path_builder_tests {}
+// pub struct PathsBuilder {
+//     // Length of arbitrage path.
+//     path_length: u8,
+//     // Token to use as output of arbitrage trade. The input token should be the same.
+//     output_token: Address,
+//     // Optional input token to the arb path
+//     input_token: Option<Address>,
+//     // Optional set of pools to filter on.
+//     pools: HashSet<Address>,
+// }
+//
+// impl PathsBuilder {
+//     pub fn path_length(self, val: u8) -> Self {
+//         Self {
+//             path_length: val,
+//             ..self
+//         }
+//     }
+//
+//     pub fn output_token(self, val: Address) -> Self {
+//         Self {
+//             output_token: val,
+//             ..self
+//         }
+//     }
+//
+//     pub fn pool(self, val: HashSet<Address>) -> Self {
+//         Self { pools: val, ..self }
+//     }
+//
+//     pub fn input_token(self, val: Address) -> Self {
+//         Self {
+//             input_token: Some(val),
+//             ..self
+//         }
+//     }
+//
+//     pub fn build(self, pools_graph: &PoolsGraph) -> Vec<Vec<ArbPool>> {
+//         // Requirements
+//         // 1. Every pool must be unique in a path
+//         // 2. Paths should have length == self.path_length
+//         // 3. start of every pool should be either self.input_token or any token in the graph
+//         // 4. Every pool must have output token of self.output_token
+//         // 5. Targeted exchanges should only be from self.targeted_exchanges
+//
+//         let start_tokens = match self.input_token {
+//             None => pools_graph.get_all_tokens(),
+//             Some(val) => vec![val],
+//         };
+//
+//         let token_paths = self.token_paths(start_tokens, pools_graph);
+//         token_paths
+//             .par_iter()
+//             .map(|path| {
+//                 // below represents a list of every possible pool for each pair in the
+//                 // path.
+//                 path.windows(2)
+//                     .map(|tokens| {
+//                         let input_token = tokens[0];
+//                         let output_token = tokens[1];
+//                         pools_graph
+//                             .get_pool_addresses(input_token, output_token)
+//                             .unwrap()
+//                             .iter()
+//                             .map(|_pool| ArbPool {
+//                                 pool: *_pool,
+//                                 token_in: input_token,
+//                                 token_out: output_token,
+//                             })
+//                             .collect()
+//                     })
+//                     .collect::<Vec<Vec<ArbPool>>>()
+//             })
+//             // Take cartesian product of pools associated with each pair in a token path and filter them.
+//             .flat_map(|pool_paths| {
+//                 pool_paths
+//                     .iter()
+//                     .multi_cartesian_product()
+//                     .map(|arb_pool_path| arb_pool_path.iter().map(|x| **x).collect())
+//                     .filter(|arb_pools| self.filter_targeted_pools(arb_pools))
+//                     // TBD whether this uniqueness is needed
+//                     .filter(Self::path_uniqueness)
+//                     .collect::<Vec<_>>()
+//             })
+//             .collect()
+//     }
+//
+//     fn token_paths(
+//         &self,
+//         start_tokens: Vec<Address>,
+//         pools_graph: &PoolsGraph,
+//     ) -> HashSet<Vec<Address>> {
+//         let mut token_paths = HashSet::new();
+//         for start_token in start_tokens {
+//             let mut stack = Vec::new();
+//             stack.push((start_token, vec![start_token]));
+//             while let Some((curr_item, curr_path)) = stack.pop() {
+//                 if curr_path.len() as u8 == self.path_length {
+//                     token_paths.insert(curr_path);
+//                     continue;
+//                 }
+//                 let curr_item_neighbours = pools_graph.get_neighbouring_tokens(&curr_item).unwrap();
+//                 if curr_path.len() as u8 == (self.path_length - 1) {
+//                     if curr_item_neighbours.contains(&self.output_token) {
+//                         let mut new_path = curr_path.clone();
+//                         new_path.push(self.output_token);
+//                         stack.push((self.output_token, new_path))
+//                     }
+//                     continue;
+//                 }
+//                 for neighbour in curr_item_neighbours.iter() {
+//                     let mut new_path = curr_path.clone();
+//                     new_path.push(*neighbour);
+//                     stack.push((*neighbour, new_path));
+//                 }
+//             }
+//         }
+//         token_paths
+//     }
+//
+//     fn filter_targeted_pools(&self, arb_pools: &Vec<ArbPool>) -> bool {
+//         if self.pools.is_empty() {
+//             return true;
+//         }
+//         for pool in arb_pools {
+//             if self.pools.contains(&pool.pool) {
+//                 return true;
+//             }
+//         }
+//         false
+//     }
+//
+//     fn path_uniqueness(arb_pools: &Vec<ArbPool>) -> bool {
+//         let mut seen = HashSet::new();
+//         for pool in arb_pools {
+//             if seen.contains(&pool.pool) {
+//                 return false;
+//             } else {
+//                 seen.insert(pool.pool);
+//             }
+//         }
+//         true
+//     }
+// }
+//
+// pub enum ExchangeType {
+//     UniswapV2,
+//     UniswapV3,
+// }
+//
+// impl From<PoolData> for ExchangeType {
+//     fn from(value: PoolData) -> Self {
+//         match value {
+//             PoolData::UniswapV2(_) => UniswapV2,
+//             PoolData::UniswapV3(_) => UniswapV3,
+//         }
+//     }
+// }
+//
+// #[cfg(test)]
+// mod path_builder_tests {}
