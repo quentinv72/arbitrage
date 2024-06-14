@@ -14,6 +14,8 @@ use pools_graph::pools_graph::PoolsGraph;
 use utils::placeholder_middleware::PlaceholderMiddleware;
 
 pub fn bench_uniswap_v2_amount_out(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bench_uniswap_v2_amount_out");
+    group.sample_size(500);
     let v2_pool = UniswapV2::new(
         Address::random(),
         Address::random(),
@@ -24,7 +26,7 @@ pub fn bench_uniswap_v2_amount_out(c: &mut Criterion) {
         None,
     );
     let (token_0, token_1) = v2_pool.get_tokens();
-    c.bench_function("v2_amount_out", |b| {
+    group.bench_function("v2_amount_out", |b| {
         b.iter(|| {
             v2_pool.get_amount_out::<PlaceholderMiddleware>(
                 black_box(U256::from(210210)),
@@ -38,6 +40,8 @@ pub fn bench_uniswap_v2_amount_out(c: &mut Criterion) {
 
 // Not the best bench because it depends on network requests
 pub fn bench_uniswap_v3_amount_out(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bench_uniswap_v3_amount_out");
+    group.sample_size(500);
     let anvil = Anvil::new()
         .fork("https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg@6077409")
         .spawn();
@@ -67,7 +71,7 @@ pub fn bench_uniswap_v3_amount_out(c: &mut Criterion) {
 
     UniswapV3::load_quoter_bytecode(&mut cache_db);
 
-    c.bench_function("v3_amount_out", |b| {
+    group.bench_function("v3_amount_out", |b| {
         b.iter(|| {
             pool.get_amount_out(
                 black_box(U256::from(1000)),
@@ -81,13 +85,13 @@ pub fn bench_uniswap_v3_amount_out(c: &mut Criterion) {
 
 fn bench_compute_all_arbitrage(c: &mut Criterion) {
     let mut group = c.benchmark_group("compute_all_arbitrage");
-    group.sample_size(10);
+    group.sample_size(100);
     let (mut arb, graph) = setup_arb();
     for num_of_steps in [
-        U256::from(10),
         U256::from(100),
+        U256::from(500),
         U256::from(1_000),
-        U256::from(10_000),
+        U256::from(3_000),
     ]
         .iter()
     {
