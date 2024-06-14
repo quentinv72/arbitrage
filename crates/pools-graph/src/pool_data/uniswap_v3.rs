@@ -21,21 +21,21 @@ use crate::pool_data::pool_data::PoolDataTrait;
 use crate::utils::EthersCacheDB;
 
 // TODO: determine what value should be used for..
-const QUOTER_MOCK_ADDRESS: alloy_primitives::Address =
+pub(crate) const QUOTER_MOCK_ADDRESS: alloy_primitives::Address =
     address!("1F98431c8aD98523631AE4a59f267346ea31F984");
 
 // bytecode generated from UniswapV3Quoter.sol
-const QUOTER_BYTECODE: &str = include_str!("UniswapV3Quoter.hex");
+pub(crate) const QUOTER_BYTECODE: &str = include_str!("UniswapV3Quoter.hex");
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct UniswapV3 {
-    pool_address: Address,
-    sqrt_price_x_96: U256,
-    token_0: Address,
-    token_1: Address,
-    fee_tier: u32,
-    block_last_updates: U64,
-    factory: FactoryV3,
+    pub(crate) pool_address: Address,
+    pub(crate) sqrt_price_x_96: U256,
+    pub(crate) token_0: Address,
+    pub(crate) token_1: Address,
+    pub(crate) fee_tier: u32,
+    pub(crate) block_last_updates: U64,
+    pub(crate) factory: FactoryV3,
 }
 
 impl UniswapV3 {

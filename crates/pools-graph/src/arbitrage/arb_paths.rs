@@ -1,14 +1,18 @@
 use std::cell::RefCell;
 use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::ops::Div;
+use std::str::FromStr;
 
 use ethers::providers::Middleware;
 use ethers::types::{Address, U256, U64};
 use itertools::Itertools;
 use rayon::prelude::*;
+use revm::primitives::{alloy_primitives, ruint, AccountInfo, Bytecode};
 
 use crate::arbitrage::arb_paths::ExchangeType::{UniswapV2, UniswapV3};
 use crate::arbitrage::arb_tx::ArbTx;
 use crate::pool_data::pool_data::{PoolData, PoolDataTrait};
+use crate::pool_data::uniswap_v3::{QUOTER_BYTECODE, QUOTER_MOCK_ADDRESS};
 use crate::pools_graph::PoolsGraph;
 use crate::utils::EthersCacheDB;
 
@@ -40,16 +44,16 @@ impl<M: Middleware> Arbs<M> {
         &mut self,
         pools_graph: &PoolsGraph,
         max_amount_in: U256,
-        step_size: U256,
+        num_steps: U256,
         block_number: U64,
     ) {
         for arb_path in &self.paths {
             let arb_tx = self
                 .compute_arbitrage(
-                    &arb_path,
+                    arb_path,
                     pools_graph,
                     max_amount_in,
-                    step_size,
+                    num_steps,
                     block_number,
                 )
                 .expect("Computed arb shouldn't fail");
@@ -69,17 +73,32 @@ impl<M: Middleware> Arbs<M> {
         }
     }
 
+    pub fn load_uniswap_v3_quoter_bytecode(&mut self) {
+        let bytes = alloy_primitives::Bytes::from_str(QUOTER_BYTECODE).unwrap();
+        let bytecode = Bytecode::new_raw(bytes);
+        self.cache_db.borrow_mut().insert_account_info(
+            QUOTER_MOCK_ADDRESS,
+            AccountInfo {
+                balance: ruint::aliases::U256::from(0),
+                nonce: 1,
+                code_hash: bytecode.hash_slow(),
+                code: Some(bytecode),
+            },
+        )
+    }
+
     fn compute_arbitrage(
         &self,
         arb_path: &Vec<ArbPool>,
         pools_graph: &PoolsGraph,
         max_amount_in: U256,
-        step_size: U256,
+        num_steps: U256,
         block_number: U64,
     ) -> anyhow::Result<Option<ArbTx>> {
         let mut amount_in = U256::zero();
         let mut profitable_arbs = None;
         let mut curr_max_profit = U256::zero();
+        let step_size = max_amount_in.div(num_steps);
         while amount_in <= max_amount_in {
             // U256 implements Copy
             let mut prev_amount_in = amount_in;
@@ -99,7 +118,7 @@ impl<M: Middleware> Arbs<M> {
                 prev_amount_in = amount_out;
             }
 
-            if prev_amount_in > curr_max_profit {
+            if prev_amount_in > amount_in && prev_amount_in - amount_in > curr_max_profit {
                 curr_max_profit = prev_amount_in;
                 profitable_arbs = Some(ArbTx::new(
                     arb_path.to_vec(),
@@ -113,6 +132,102 @@ impl<M: Middleware> Arbs<M> {
             amount_in += step_size;
         }
         Ok(profitable_arbs)
+    }
+}
+
+#[cfg(test)]
+mod arbs_tests {
+    use std::sync::Arc;
+
+    use ethers::prelude::{Http, Provider};
+    use ethers::types::{U256, U64};
+    use ethers::utils::Anvil;
+    use revm::db::{CacheDB, EthersDB};
+
+    use crate::arbitrage::arb_paths::{ArbPool, Arbs};
+    use crate::pool_data::uniswap_v2::UniswapV2;
+    use crate::pool_data::uniswap_v3::UniswapV3;
+    use crate::pools_graph::PoolsGraph;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn compute_all_arbitrage() {
+        // https://dashboard.tenderly.co/tx/mainnet/0x5b7ab63e7b23e37eca4a3723e7df22897613da681e6d0d47f689177218b0ecb9?trace=0
+        // Inspiration for the test
+        let block_number = U64::from(20077116);
+        let anvil = Anvil::new()
+            .fork("https://eth-mainnet.g.alchemy.com/v2/Xc1e5k88oOw8atNHzpPXbSw3pKrQ2a4-@20077116")
+            .spawn();
+
+        let provider = Arc::new(Provider::<Http>::try_from(anvil.endpoint()).unwrap());
+
+        let ethers_db = EthersDB::new(provider.clone(), None).unwrap();
+        let cache_db = CacheDB::new(ethers_db);
+
+        let uniswap_v3_pool = UniswapV3 {
+            pool_address: "0xb457fcd59cbe5cb116d1f649fa0f921b42557aef"
+                .parse()
+                .unwrap(),
+            token_0: "0x1e971b5b21367888239f00Da16F0A6b0efFeCb03"
+                .parse()
+                .unwrap(),
+            token_1: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                .parse()
+                .unwrap(),
+            ..Default::default()
+        };
+
+        let mut uniswap_v2_pair = UniswapV2 {
+            pair_address: "0x3574948e6ba1d48a57f4ade944bc0e4eb20f7d5e"
+                .parse()
+                .unwrap(),
+            token_0: "0x1e971b5b21367888239f00Da16F0A6b0efFeCb03"
+                .parse()
+                .unwrap(),
+            token_1: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                .parse()
+                .unwrap(),
+            ..Default::default()
+        };
+
+        // Update reserves for the Uniswap V2 pair
+        uniswap_v2_pair
+            .maybe_refresh_reserves(Some(block_number), provider.clone())
+            .await
+            .unwrap();
+
+        let pools_graph = PoolsGraph::default();
+        pools_graph.insert(uniswap_v2_pair.clone().into());
+        pools_graph.insert(uniswap_v3_pool.clone().into());
+
+        let arb_path = vec![
+            ArbPool {
+                pool: uniswap_v3_pool.pool_address,
+                token_in: uniswap_v3_pool.token_0,
+                token_out: uniswap_v3_pool.token_1,
+            },
+            ArbPool {
+                pool: uniswap_v2_pair.pair_address,
+                token_in: uniswap_v2_pair.token_1,
+                token_out: uniswap_v2_pair.token_0,
+            },
+        ];
+
+        let mut arbs = Arbs::new(vec![arb_path.clone()], cache_db);
+
+        arbs.load_uniswap_v3_quoter_bytecode();
+
+        arbs.compute_all_arbitrages(
+            &pools_graph,
+            U256::from_dec_str("505000000000000000000000").unwrap(),
+            U256::from(100),
+            block_number,
+        );
+        assert_eq!(arbs.arb_txs.len(), 1);
+        assert_eq!(
+            arbs.arb_txs.peek().unwrap().estimated_profit(),
+            U256::from_dec_str("1116824102838017552066455359").unwrap()
+        );
+        assert_eq!(arbs.last_valid_tx.get(&arb_path).unwrap(), &block_number);
     }
 }
 
@@ -209,7 +324,7 @@ impl PathsBuilder {
                     .map(|arb_pool_path| arb_pool_path.iter().map(|x| **x).collect())
                     .filter(|arb_pools| self.filter_targeted_pools(arb_pools))
                     // TBD whether this uniqueness is needed
-                    .filter(|arb_pools| Self::path_uniqueness(arb_pools))
+                    .filter(Self::path_uniqueness)
                     .collect::<Vec<_>>()
             })
             .collect()
@@ -224,8 +339,7 @@ impl PathsBuilder {
         for start_token in start_tokens {
             let mut stack = Vec::new();
             stack.push((start_token, vec![start_token]));
-            while !stack.is_empty() {
-                let (curr_item, curr_path) = stack.pop().unwrap();
+            while let Some((curr_item, curr_path)) = stack.pop() {
                 if curr_path.len() as u8 == self.path_length {
                     token_paths.insert(curr_path);
                     continue;
@@ -258,7 +372,7 @@ impl PathsBuilder {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     fn path_uniqueness(arb_pools: &Vec<ArbPool>) -> bool {
@@ -270,7 +384,7 @@ impl PathsBuilder {
                 seen.insert(pool.pool);
             }
         }
-        return true;
+        true
     }
 }
 
@@ -287,3 +401,6 @@ impl From<PoolData> for ExchangeType {
         }
     }
 }
+
+#[cfg(test)]
+mod path_builder_tests {}

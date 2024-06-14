@@ -17,13 +17,13 @@ use crate::utils::EthersCacheDB;
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct UniswapV2 {
-    pair_address: Address,
-    token_0: Address,
-    reserve_0: u128,
-    token_1: Address,
-    reserve_1: u128,
-    block_last_updated: U64,
-    factory: FactoryV2,
+    pub(crate) pair_address: Address,
+    pub(crate) token_0: Address,
+    pub(crate) reserve_0: u128,
+    pub(crate) token_1: Address,
+    pub(crate) reserve_1: u128,
+    pub(crate) block_last_updated: U64,
+    pub(crate) factory: FactoryV2,
 }
 
 impl UniswapV2 {
