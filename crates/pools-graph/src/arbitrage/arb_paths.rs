@@ -260,6 +260,56 @@ pub struct ArbPool {
     // Output token for swap in pool.
     pub token_out: Address,
 }
+//
+// impl ArbPool {
+//     fn compute_arbitrage<M:Middleware>(
+//         &self,
+//         pools_graph: &PoolsGraph,
+//         max_amount_in: U256,
+//         num_steps: U256,
+//         block_number: U64,
+//         cache_db: EthersCacheDB<M>
+//     ) -> anyhow::Result<Option<ArbTx>> {
+//         let mut amount_in = U256::zero();
+//         let mut profitable_arbs = None;
+//         let mut curr_max_profit = U256::zero();
+//         let step_size = max_amount_in.div(num_steps);
+//         while amount_in <= max_amount_in {
+//             // U256 implements Copy
+//             let mut prev_amount_in = amount_in;
+//             // Vec<(amount_in, amount_out)>
+//             let mut tmp_amounts = Vec::new();
+//             for arb_pool in arb_path {
+//                 let pool_data = pools_graph
+//                     .get_pool_data(&arb_pool.pool)
+//                     .expect("Pool data should not be None");
+//                 let amount_out = pool_data.get_amount_out::<M>(
+//                     amount_in,
+//                     arb_pool.token_in,
+//                     arb_pool.token_out,
+//                     Some(&mut self.cache_db.borrow_mut()),
+//                 )?;
+//                 tmp_amounts.push((prev_amount_in, amount_out));
+//                 prev_amount_in = amount_out;
+//             }
+//
+//             if prev_amount_in > amount_in && prev_amount_in - amount_in > curr_max_profit {
+//                 curr_max_profit = prev_amount_in;
+//                 profitable_arbs = Some(ArbTx::new(
+//                     arb_path.to_vec(),
+//                     tmp_amounts.iter().map(|x| x.0).collect(),
+//                     tmp_amounts.iter().map(|x| x.1).collect(),
+//                     U256::zero(),
+//                     None,
+//                     block_number,
+//                 ))
+//             }
+//             amount_in += step_size;
+//         }
+//         Ok(profitable_arbs)
+//     }
+// }
+// }
 
 // ####### UNTESTED and NOT USING FOR NOW #######
 // Reason: Too complex, seems simpler to write custom functions for each bot....
