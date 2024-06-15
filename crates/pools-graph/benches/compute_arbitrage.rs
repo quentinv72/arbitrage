@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use ethers::prelude::{Http, Provider, U256, U64};
 use ethers::utils::WEI_IN_ETHER;
 use revm::db::{CacheDB, EthersDB};
@@ -12,11 +12,10 @@ use pools_graph::pools_graph::PoolsGraph;
 fn bench_compute_all_arbitrage_2_v3_pools(c: &mut Criterion) {
     let mut group = c.benchmark_group("compute_all_arbitrage_2_v3_pools");
     group.sample_size(100);
-    let (mut arb, graph) = setup_arb();
     for num_of_steps in [
         U256::from(100),
-        U256::from(500),
-        U256::from(1_000),
+        // U256::from(500),
+        // U256::from(1_000),
         // U256::from(3_000),
     ]
         .iter()
@@ -25,11 +24,10 @@ fn bench_compute_all_arbitrage_2_v3_pools(c: &mut Criterion) {
             BenchmarkId::from_parameter(num_of_steps),
             num_of_steps,
             |b, &num_steps| {
-                b.iter(|| {
+                b.iter_batched(setup_arb, |(mut arb, graph)| {
                     arb.load_uniswap_v3_quoter_bytecode();
                     arb.compute_all_arbitrages(&graph, WEI_IN_ETHER, num_steps, U64::zero());
-                    arb.clear_cache();
-                })
+                }, BatchSize::SmallInput)
             },
         );
     }
