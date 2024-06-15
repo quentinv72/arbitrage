@@ -6,7 +6,7 @@ use std::str::FromStr;
 use ethers::providers::Middleware;
 use ethers::types::{Address, U256, U64};
 use revm::precompile::B256;
-use revm::primitives::{AccountInfo, alloy_primitives, Bytecode, KECCAK_EMPTY, ruint};
+use revm::primitives::{alloy_primitives, ruint, AccountInfo, Bytecode, KECCAK_EMPTY};
 
 use crate::arbitrage::arb_tx::ArbTx;
 use crate::pool_data::pool_data::PoolDataTrait;

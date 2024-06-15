@@ -34,4 +34,3 @@ harness = false
 [[bench]]
 name = "compute_arbitrage"
 harness = false
-

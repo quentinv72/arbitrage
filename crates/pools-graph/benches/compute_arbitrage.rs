@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use ethers::prelude::{Http, Provider, U256, U64};
 use ethers::utils::WEI_IN_ETHER;
 use revm::db::{CacheDB, EthersDB};
@@ -12,33 +12,26 @@ use pools_graph::pools_graph::PoolsGraph;
 fn bench_compute_all_arbitrage_2_v3_pools(c: &mut Criterion) {
     let mut group = c.benchmark_group("compute_all_arbitrage_2_v3_pools");
     group.sample_size(100);
-    for num_of_steps in [
-        U256::from(100),
-        U256::from(500),
-        U256::from(1_000),
-    ]
-        .iter()
-    {
+    for num_of_steps in [U256::from(100), U256::from(500), U256::from(1_000)].iter() {
         group.bench_with_input(
             BenchmarkId::from_parameter(num_of_steps),
             num_of_steps,
             |b, &num_steps| {
-                b.iter_batched(setup_arb, |(mut arb, graph)| {
-                    arb.load_uniswap_v3_quoter_bytecode();
-                    arb.compute_all_arbitrages(&graph, WEI_IN_ETHER, num_steps, U64::zero());
-                }, BatchSize::SmallInput)
+                b.iter_batched(
+                    setup_arb,
+                    |(mut arb, graph)| {
+                        arb.load_uniswap_v3_quoter_bytecode();
+                        arb.compute_all_arbitrages(&graph, WEI_IN_ETHER, num_steps, U64::zero());
+                    },
+                    BatchSize::SmallInput,
+                )
             },
         );
     }
 }
 
 fn setup_arb() -> (Arbs<Provider<Http>>, PoolsGraph) {
-    let provider = Arc::new(
-        Provider::<Http>::try_from(
-            "http://localhost:8545",
-        )
-            .unwrap(),
-    );
+    let provider = Arc::new(Provider::<Http>::try_from("http://localhost:8545").unwrap());
 
     let ethers_db = EthersDB::new(provider.clone(), None).unwrap();
     let cache_db = CacheDB::new(ethers_db);
@@ -76,8 +69,5 @@ fn setup_arb() -> (Arbs<Provider<Http>>, PoolsGraph) {
     (arbs, pools_graph)
 }
 
-criterion_group!(
-    benches,
-    bench_compute_all_arbitrage_2_v3_pools
-);
+criterion_group!(benches, bench_compute_all_arbitrage_2_v3_pools);
 criterion_main!(benches);
