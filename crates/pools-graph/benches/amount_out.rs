@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
-use criterion::{black_box, Criterion, criterion_group, criterion_main};
+use criterion::{BatchSize, black_box, Criterion, criterion_group, criterion_main};
 use ethers::prelude::{Http, Provider};
 use ethers::types::{Address, U256, U64};
-use ethers::utils::Anvil;
 use revm::db::{CacheDB, EthersDB};
 
 use pools_graph::pool_data::pool_data::PoolDataTrait;
 use pools_graph::pool_data::uniswap_v2::UniswapV2;
 use pools_graph::pool_data::uniswap_v3::UniswapV3;
+use pools_graph::utils::EthersCacheDB;
 use utils::placeholder_middleware::PlaceholderMiddleware;
 
 pub fn bench_uniswap_v2_amount_out(c: &mut Criterion) {
@@ -36,49 +36,50 @@ pub fn bench_uniswap_v2_amount_out(c: &mut Criterion) {
     });
 }
 
-// Not the best bench because it depends on network requests
+// This bench test only tests get_amount_out when nothing has been cached in Ethers Db
+// To get an idea of what it looks like with cache, look at the compute_arbitrage results.
 pub fn bench_uniswap_v3_amount_out(c: &mut Criterion) {
     let mut group = c.benchmark_group("bench_uniswap_v3_amount_out");
-    group.sample_size(500);
-    let anvil = Anvil::new()
-        .fork("https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg@6077409")
-        .spawn();
-
-    let provider = Arc::new(Provider::<Http>::try_from(anvil.endpoint()).unwrap());
-
-    let pool = UniswapV3::new(
-        "0x9799b5EDC1aA7D3FAd350309B08df3F64914E244"
+    group.sample_size(100);
+    let pool = UniswapV3 {
+        pool_address: "0xb457fcd59cbe5cb116d1f649fa0f921b42557aef"
             .parse()
             .unwrap(),
-        U256::zero(),
-        "0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8"
+        token_0: "0x1e971b5b21367888239f00Da16F0A6b0efFeCb03"
             .parse()
             .unwrap(),
-        "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
+        token_1: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
             .parse()
             .unwrap(),
-        3,
-        None,
-    );
+        ..Default::default()
+    };
 
     let (token_0, token_1) = pool.get_tokens();
 
-    let ethers_db = EthersDB::new(provider, None).unwrap();
-
-    let mut cache_db = CacheDB::new(ethers_db);
-
-    UniswapV3::load_quoter_bytecode(&mut cache_db);
 
     group.bench_function("v3_amount_out", |b| {
-        b.iter(|| {
+        b.iter_batched(setup_cache_db, |mut cache_db| {
             pool.get_amount_out(
                 black_box(U256::from(1000)),
                 token_0,
                 token_1,
                 Some(&mut cache_db),
             )
-        })
+        }, BatchSize::SmallInput)
     });
+}
+
+fn setup_cache_db() -> EthersCacheDB<Provider<Http>> {
+    let provider = Arc::new(
+        Provider::<Http>::try_from(
+            "http://localhost:8545",
+        )
+            .unwrap(),
+    );
+    let ethers_db = EthersDB::new(provider, None).unwrap();
+    let mut cache_db = CacheDB::new(ethers_db);
+    UniswapV3::load_quoter_bytecode(&mut cache_db);
+    cache_db
 }
 
 criterion_group!(

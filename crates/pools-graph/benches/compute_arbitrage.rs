@@ -14,9 +14,8 @@ fn bench_compute_all_arbitrage_2_v3_pools(c: &mut Criterion) {
     group.sample_size(100);
     for num_of_steps in [
         U256::from(100),
-        // U256::from(500),
-        // U256::from(1_000),
-        // U256::from(3_000),
+        U256::from(500),
+        U256::from(1_000),
     ]
         .iter()
     {
