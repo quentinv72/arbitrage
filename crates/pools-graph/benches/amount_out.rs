@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{BatchSize, black_box, Criterion, criterion_group, criterion_main};
 use ethers::prelude::{Http, Provider};
 use ethers::types::{Address, U256, U64};
 use revm::db::{CacheDB, EthersDB};
@@ -129,5 +129,6 @@ criterion_group!(
     benches,
     bench_uniswap_v2_amount_out,
     bench_uniswap_v3_amount_out,
+    bench_uniswap_v3_quoter_direct,
 );
 criterion_main!(benches);
