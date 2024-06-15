@@ -100,7 +100,7 @@ fn bench_uniswap_v3_quoter_direct(c: &mut Criterion) {
                     fee: 10000,
                     sqrt_price_limit_x96: U256::from_dec_str("4295128749").unwrap(),
                 };
-                quoter.quote_exact_input_single(request).call().await;
+                let _ = quoter.quote_exact_input_single(request).call().await;
             },
             BatchSize::SmallInput,
         )

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
+use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use ethers::prelude::{Http, Provider, U256, U64};
 use ethers::utils::WEI_IN_ETHER;
 use revm::db::{CacheDB, EthersDB};
@@ -65,7 +65,7 @@ fn setup_arb() -> (Arbs<Provider<Http>>, PoolsGraph) {
         },
     ];
 
-    let mut arbs = Arbs::new(vec![arb_path_1], cache_db);
+    let arbs = Arbs::new(vec![arb_path_1], cache_db);
     (arbs, pools_graph)
 }
 
