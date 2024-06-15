@@ -28,5 +28,10 @@ criterion.workspace = true
 module_inception = "allow"
 
 [[bench]]
-name = "benchmark"
+name = "amount_out"
 harness = false
+
+[[bench]]
+name = "compute_arbitrage"
+harness = false
+
