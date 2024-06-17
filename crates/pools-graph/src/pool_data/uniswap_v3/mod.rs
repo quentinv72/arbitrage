@@ -18,7 +18,9 @@ use contracts::uniswap_v_3_quoter::GetAmountOutCall;
 
 use crate::pool_data::factory::{Factory, FactoryV3};
 use crate::pool_data::pool_data::PoolDataTrait;
-use crate::utils::EthersCacheDB;
+use crate::pool_data::utils::EthersCacheDB;
+
+pub mod utils;
 
 // TODO: determine what value should be used for..
 pub(crate) const QUOTER_MOCK_ADDRESS: alloy_primitives::Address =

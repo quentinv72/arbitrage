@@ -105,6 +105,10 @@ async fn get_pools(url: &str, vars: Vars) -> Result<Vec<Pool>, Box<dyn std::erro
     }
 }
 
+pub trait LoadQuoterV3<M: Middleware> {
+    fn load_uniswap_v3_quoter(&mut self);
+}
+
 #[derive(Serialize)]
 struct Vars {
     first: u32,

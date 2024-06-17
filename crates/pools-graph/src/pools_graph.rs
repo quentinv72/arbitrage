@@ -133,13 +133,6 @@ impl PoolsGraph {
         }
     }
 
-    pub(crate) fn get_all_tokens(&self) -> Vec<Address> {
-        self.neighbouring_erc20_tokens
-            .iter()
-            .map(|x| *x.key())
-            .collect()
-    }
-
     fn insert_tokens(&self, pool_address: Address, token_0: Address, token_1: Address) {
         match self.neighbouring_erc20_tokens.get(&token_0) {
             Some(kv) => {

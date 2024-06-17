@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use criterion::{BatchSize, black_box, Criterion, criterion_group, criterion_main};
+use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 use ethers::prelude::{Http, Provider};
 use ethers::types::{Address, U256, U64};
 use revm::db::{CacheDB, EthersDB};
@@ -10,7 +10,7 @@ use contracts::i_quoter_v_2::{IQuoterV2, QuoteExactInputSingleParams};
 use pools_graph::pool_data::pool_data::PoolDataTrait;
 use pools_graph::pool_data::uniswap_v2::UniswapV2;
 use pools_graph::pool_data::uniswap_v3::UniswapV3;
-use pools_graph::utils::EthersCacheDB;
+use pools_graph::pool_data::utils::EthersCacheDB;
 use utils::placeholder_middleware::PlaceholderMiddleware;
 
 pub fn bench_uniswap_v2_amount_out(c: &mut Criterion) {

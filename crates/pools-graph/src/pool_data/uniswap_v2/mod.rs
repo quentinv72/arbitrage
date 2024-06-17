@@ -13,7 +13,9 @@ use contracts::i_uniswap_v_2_pair::{IUniswapV2Pair, SwapCall};
 
 use crate::pool_data::factory::{Factory, FactoryV2};
 use crate::pool_data::pool_data::PoolDataTrait;
-use crate::utils::EthersCacheDB;
+use crate::pool_data::utils::EthersCacheDB;
+
+pub mod utils;
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct UniswapV2 {

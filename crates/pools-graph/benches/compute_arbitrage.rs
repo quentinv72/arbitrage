@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
-use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use ethers::prelude::{Http, Provider, U256, U64};
 use ethers::utils::WEI_IN_ETHER;
 use revm::db::{CacheDB, EthersDB};
 
-use pools_graph::arbitrage::arb_paths::{ArbPool, Arbs};
+use pools_graph::arbitrage::arbs::{ArbPool, Arbs};
+use pools_graph::pool_data::uniswap_v3::utils::LoadQuoterV3;
 use pools_graph::pool_data::uniswap_v3::UniswapV3;
 use pools_graph::pools_graph::PoolsGraph;
 
@@ -20,7 +21,7 @@ fn bench_compute_all_arbitrage_2_v3_pools(c: &mut Criterion) {
                 b.iter_batched(
                     setup_arb,
                     |(mut arb, graph)| {
-                        arb.load_uniswap_v3_quoter_bytecode();
+                        arb.load_uniswap_v3_quoter();
                         arb.compute_all_arbitrages(&graph, WEI_IN_ETHER, num_steps, U64::zero());
                     },
                     BatchSize::SmallInput,

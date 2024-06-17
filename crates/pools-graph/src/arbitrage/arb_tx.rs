@@ -14,7 +14,7 @@ use log::{error, info};
 use contracts::qv_executor::QVExecutor;
 use utils::utils::FlashbotsProvider;
 
-use crate::arbitrage::arb_paths::ArbPool;
+use crate::arbitrage::arbs::ArbPool;
 use crate::pool_data::pool_data::PoolDataTrait;
 use crate::pools_graph::PoolsGraph;
 
@@ -268,8 +268,8 @@ mod tests {
     use ethers::prelude::{Http, Provider};
     use ethers::types::{Address, U256, U64};
 
-    use crate::arbitrage::arb_paths::ArbPool;
     use crate::arbitrage::arb_tx::ArbTx;
+    use crate::arbitrage::arbs::ArbPool;
     use crate::pool_data::uniswap_v2::UniswapV2;
     use crate::pools_graph::PoolsGraph;
 

@@ -10,9 +10,10 @@ use revm::primitives::{alloy_primitives, ruint, AccountInfo, Bytecode, KECCAK_EM
 
 use crate::arbitrage::arb_tx::ArbTx;
 use crate::pool_data::pool_data::PoolDataTrait;
+use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
 use crate::pool_data::uniswap_v3::{QUOTER_BYTECODE, QUOTER_MOCK_ADDRESS};
+use crate::pool_data::utils::EthersCacheDB;
 use crate::pools_graph::PoolsGraph;
-use crate::utils::EthersCacheDB;
 
 pub struct Arbs<M: Middleware> {
     // All arbitrage path. This should only contain paths that may
@@ -53,21 +54,6 @@ impl<M: Middleware> Arbs<M> {
             .borrow_mut()
             .contracts
             .insert(B256::ZERO, Bytecode::default());
-    }
-
-    // Should be called at the start of each block to ensure that the
-    pub fn load_uniswap_v3_quoter_bytecode(&mut self) {
-        let bytes = alloy_primitives::Bytes::from_str(QUOTER_BYTECODE).unwrap();
-        let bytecode = Bytecode::new_raw(bytes);
-        self.cache_db.borrow_mut().insert_account_info(
-            QUOTER_MOCK_ADDRESS,
-            AccountInfo {
-                balance: ruint::aliases::U256::from(0),
-                nonce: 1,
-                code_hash: bytecode.hash_slow(),
-                code: Some(bytecode),
-            },
-        )
     }
 
     pub fn compute_all_arbitrages(
@@ -154,6 +140,22 @@ impl<M: Middleware> Arbs<M> {
     }
 }
 
+impl<M: Middleware> LoadQuoterV3<M> for Arbs<M> {
+    fn load_uniswap_v3_quoter(&mut self) {
+        let bytes = alloy_primitives::Bytes::from_str(QUOTER_BYTECODE).unwrap();
+        let bytecode = Bytecode::new_raw(bytes);
+        self.cache_db.borrow_mut().insert_account_info(
+            QUOTER_MOCK_ADDRESS,
+            AccountInfo {
+                balance: ruint::aliases::U256::from(0),
+                nonce: 1,
+                code_hash: bytecode.hash_slow(),
+                code: Some(bytecode),
+            },
+        )
+    }
+}
+
 #[cfg(test)]
 mod arbs_tests {
     use std::sync::Arc;
@@ -163,8 +165,9 @@ mod arbs_tests {
     use ethers::utils::Anvil;
     use revm::db::{CacheDB, EthersDB};
 
-    use crate::arbitrage::arb_paths::{ArbPool, Arbs};
+    use crate::arbitrage::arbs::{ArbPool, Arbs};
     use crate::pool_data::uniswap_v2::UniswapV2;
+    use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
     use crate::pool_data::uniswap_v3::UniswapV3;
     use crate::pools_graph::PoolsGraph;
 
@@ -233,7 +236,7 @@ mod arbs_tests {
 
         let mut arbs = Arbs::new(vec![arb_path.clone()], cache_db);
 
-        arbs.load_uniswap_v3_quoter_bytecode();
+        arbs.load_uniswap_v3_quoter();
 
         arbs.compute_all_arbitrages(
             &pools_graph,

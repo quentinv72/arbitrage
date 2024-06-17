@@ -1,2 +1,2 @@
-pub mod arb_paths;
 pub mod arb_tx;
+pub mod arbs;

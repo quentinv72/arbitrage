@@ -10,7 +10,7 @@ use ethers::types::{Address, Bytes, Log, U256, U64};
 use crate::pool_data::factory::Factory;
 use crate::pool_data::uniswap_v2::UniswapV2;
 use crate::pool_data::uniswap_v3::UniswapV3;
-use crate::utils::EthersCacheDB;
+use crate::pool_data::utils::EthersCacheDB;
 
 #[enum_dispatch(PoolDataTrait)]
 #[derive(Eq, PartialEq, Debug)]
