@@ -6,34 +6,41 @@ use std::str::FromStr;
 use ethers::providers::Middleware;
 use ethers::types::{Address, U256, U64};
 use revm::precompile::B256;
-use revm::primitives::{alloy_primitives, ruint, AccountInfo, Bytecode, KECCAK_EMPTY};
+use revm::primitives::{AccountInfo, alloy_primitives, Bytecode, KECCAK_EMPTY, ruint};
 
-use crate::arbitrage::arb_tx::ArbTx;
+use crate::arbitrage::ExecutorTx;
 use crate::pool_data::pool_data::PoolDataTrait;
-use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
 use crate::pool_data::uniswap_v3::{QUOTER_BYTECODE, QUOTER_MOCK_ADDRESS};
+use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
 use crate::pool_data::utils::EthersCacheDB;
 use crate::pools_graph::PoolsGraph;
 
-pub struct Arbs<M: Middleware> {
+pub struct Arbs<M: Middleware, T: ExecutorTx + Ord> {
     // All arbitrage path. This should only contain paths that may
     // have arbitrage in a given block, except for the first block where object is built.
     // would be useful to have a zero for one concept on the paths...
     paths: Vec<Vec<ArbPool>>,
     // Heap of valid arbitrage transactions
     // they may have been computed in a previous block,but should always be valid.
-    arb_txs: BinaryHeap<ArbTx>,
-    // Used to invalidate old ArbTx in arb_txs
+    // (Tx, block_number)
+    // Tuples are compared lexicographically.
+    // https://stackoverflow.com/questions/61322773/how-is-ordering-defined-for-tuples-in-rust
+    executor_txs: BinaryHeap<(T, U64)>,
+    // Used to invalidate old ExecutorV1 in executor_txs
     last_valid_tx: HashMap<Vec<ArbPool>, U64>,
     // Cache db used by REVM to compute swaps for UniswapV3, etc.
     cache_db: RefCell<EthersCacheDB<M>>,
 }
 
-impl<M: Middleware> Arbs<M> {
-    pub fn new(paths: Vec<Vec<ArbPool>>, cache_db: EthersCacheDB<M>) -> Self {
+impl<M, T> Arbs<M, T>
+    where
+        M: Middleware,
+        T: ExecutorTx + Ord,
+{
+    pub fn new(paths: Vec<Vec<ArbPool>>, cache_db: EthersCacheDB<M>) -> Arbs<M, T> {
         Self {
             paths,
-            arb_txs: BinaryHeap::new(),
+            executor_txs: BinaryHeap::new(),
             last_valid_tx: HashMap::new(),
             cache_db: RefCell::new(cache_db),
         }
@@ -68,18 +75,12 @@ impl<M: Middleware> Arbs<M> {
         // Needs to be benchmarked.
         for arb_path in &self.paths {
             let arb_tx = self
-                .compute_arbitrage(
-                    arb_path,
-                    pools_graph,
-                    max_amount_in,
-                    num_steps,
-                    block_number,
-                )
+                .compute_arbitrage(arb_path, pools_graph, max_amount_in, num_steps)
                 .expect("Computed arb shouldn't fail");
             match arb_tx {
                 Some(arb) => {
                     // add arb tx to heap
-                    self.arb_txs.push(arb);
+                    self.executor_txs.push((arb, block_number));
                     // invalidate other arb tx on that path from previous blocks that
                     // may still be on the heap.
                     self.last_valid_tx.insert(arb_path.to_vec(), block_number);
@@ -98,8 +99,7 @@ impl<M: Middleware> Arbs<M> {
         pools_graph: &PoolsGraph,
         max_amount_in: U256,
         num_steps: U256,
-        block_number: U64,
-    ) -> anyhow::Result<Option<ArbTx>> {
+    ) -> anyhow::Result<Option<T>> {
         let mut amount_in = U256::zero();
         let mut profitable_arbs = None;
         let mut curr_max_profit = U256::zero();
@@ -113,7 +113,7 @@ impl<M: Middleware> Arbs<M> {
                 let pool_data = pools_graph
                     .get_pool_data(&arb_pool.pool)
                     .expect("Pool data should not be None");
-                let amount_out = pool_data.get_amount_out::<M>(
+                let amount_out = pool_data.get_amount_out(
                     amount_in,
                     arb_pool.token_in,
                     arb_pool.token_out,
@@ -125,13 +125,13 @@ impl<M: Middleware> Arbs<M> {
 
             if prev_amount_in > amount_in && prev_amount_in - amount_in > curr_max_profit {
                 curr_max_profit = prev_amount_in;
-                profitable_arbs = Some(ArbTx::new(
+                profitable_arbs = Some(T::new(
                     arb_path.to_vec(),
                     tmp_amounts.iter().map(|x| x.0).collect(),
                     tmp_amounts.iter().map(|x| x.1).collect(),
-                    U256::zero(),
-                    None,
-                    block_number,
+                    // U256::zero(),
+                    // None,
+                    // block_number,
                 ))
             }
             amount_in += step_size;
@@ -140,7 +140,11 @@ impl<M: Middleware> Arbs<M> {
     }
 }
 
-impl<M: Middleware> LoadQuoterV3<M> for Arbs<M> {
+impl<M, T> LoadQuoterV3<M> for Arbs<M, T>
+    where
+        M: Middleware,
+        T: ExecutorTx + Ord,
+{
     fn load_uniswap_v3_quoter(&mut self) {
         let bytes = alloy_primitives::Bytes::from_str(QUOTER_BYTECODE).unwrap();
         let bytecode = Bytecode::new_raw(bytes);
@@ -165,10 +169,12 @@ mod arbs_tests {
     use ethers::utils::Anvil;
     use revm::db::{CacheDB, EthersDB};
 
+    use crate::arbitrage::arb_tx::ExecutorV1;
     use crate::arbitrage::arbs::{ArbPool, Arbs};
+    use crate::arbitrage::ExecutorTx;
     use crate::pool_data::uniswap_v2::UniswapV2;
-    use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
     use crate::pool_data::uniswap_v3::UniswapV3;
+    use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
     use crate::pools_graph::PoolsGraph;
 
     #[tokio::test(flavor = "multi_thread")]
@@ -234,7 +240,8 @@ mod arbs_tests {
             },
         ];
 
-        let mut arbs = Arbs::new(vec![arb_path.clone()], cache_db);
+        let mut arbs: Arbs<Provider<Http>, ExecutorV1> =
+            Arbs::new(vec![arb_path.clone()], cache_db);
 
         arbs.load_uniswap_v3_quoter();
 
@@ -244,9 +251,9 @@ mod arbs_tests {
             U256::from(100),
             block_number,
         );
-        assert_eq!(arbs.arb_txs.len(), 1);
+        assert_eq!(arbs.executor_txs.len(), 1);
         assert_eq!(
-            arbs.arb_txs.peek().unwrap().estimated_profit(),
+            arbs.executor_txs.peek().unwrap().0.estimated_profit(),
             U256::from_dec_str("1116824102838017552066455359").unwrap()
         );
         assert_eq!(arbs.last_valid_tx.get(&arb_path).unwrap(), &block_number);
@@ -272,7 +279,7 @@ pub struct ArbPool {
 //         num_steps: U256,
 //         block_number: U64,
 //         cache_db: EthersCacheDB<M>
-//     ) -> anyhow::Result<Option<ArbTx>> {
+//     ) -> anyhow::Result<Option<ExecutorV1>> {
 //         let mut amount_in = U256::zero();
 //         let mut profitable_arbs = None;
 //         let mut curr_max_profit = U256::zero();
@@ -298,7 +305,7 @@ pub struct ArbPool {
 //
 //             if prev_amount_in > amount_in && prev_amount_in - amount_in > curr_max_profit {
 //                 curr_max_profit = prev_amount_in;
-//                 profitable_arbs = Some(ArbTx::new(
+//                 profitable_arbs = Some(ExecutorV1::new(
 //                     arb_path.to_vec(),
 //                     tmp_amounts.iter().map(|x| x.0).collect(),
 //                     tmp_amounts.iter().map(|x| x.1).collect(),

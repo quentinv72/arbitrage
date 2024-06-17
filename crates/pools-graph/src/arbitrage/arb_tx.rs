@@ -3,88 +3,70 @@ use std::ops::{Div, Mul};
 use std::sync::Arc;
 
 use ethers::abi::{encode, Token};
-use ethers::contract::ContractCall;
+use ethers::abi::AbiEncode;
 use ethers::prelude::*;
 use ethers::providers::Middleware;
-use ethers::types::transaction::eip2718::TypedTransaction;
 use ethers::types::{Address, Bytes, U256, U64};
+use ethers::types::transaction::eip2718::TypedTransaction;
 use ethers_flashbots::*;
 use log::{error, info};
 
-use contracts::qv_executor::QVExecutor;
+use contracts::qv_executor::ExecuteBundleCall;
 use utils::utils::FlashbotsProvider;
 
 use crate::arbitrage::arbs::ArbPool;
+use crate::arbitrage::ExecutorTx;
 use crate::pool_data::pool_data::PoolDataTrait;
 use crate::pools_graph::PoolsGraph;
 
 #[derive(Eq, Debug)]
-pub struct ArbTx {
+pub struct ExecutorV1 {
     targets: Vec<ArbPool>,
     amounts_in: Vec<U256>,
     amounts_out: Vec<U256>,
     amount_to_coinbase: U256,
     estimated_profit: U256,
-    creation_block_number: U64,
 }
 
-impl PartialEq<Self> for ArbTx {
+impl PartialEq<Self> for ExecutorV1 {
     fn eq(&self, other: &Self) -> bool {
         self.estimated_profit == other.estimated_profit
     }
 }
 
-impl PartialOrd<Self> for ArbTx {
+impl PartialOrd<Self> for ExecutorV1 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for ArbTx {
+impl Ord for ExecutorV1 {
     fn cmp(&self, other: &Self) -> Ordering {
         self.estimated_profit.cmp(&other.estimated_profit)
     }
 }
 
-impl ArbTx {
-    pub fn new(
-        targets: Vec<ArbPool>,
-        amounts_in: Vec<U256>,
-        amounts_out: Vec<U256>,
-        amount_to_coinbase: U256,
-        profit: Option<U256>,
-        creation_block_number: U64,
-    ) -> ArbTx {
-        let estimated_profit = match profit {
-            None => amounts_out.last().unwrap() - amounts_in.first().unwrap(),
-            Some(val) => val,
-        };
-
-        ArbTx {
+impl ExecutorTx for ExecutorV1 {
+    fn new(targets: Vec<ArbPool>, amounts_in: Vec<U256>, amounts_out: Vec<U256>) -> Self {
+        // TODO ad logic to determine amount to send to coinbase
+        // An idea is only to add coinbase when estimated profit is obviously going to be
+        // substantially larger than potential gas costs.
+        let estimated_profit = amounts_out.last().unwrap() - amounts_in.first().unwrap();
+        ExecutorV1 {
             targets,
             amounts_in,
             amounts_out,
-            amount_to_coinbase,
             estimated_profit,
-            creation_block_number,
+            amount_to_coinbase: U256::zero(),
         }
     }
 
-    pub fn estimated_profit(&self) -> U256 {
-        self.estimated_profit
-    }
-    //
-    // pub fn get_pair_addresses(&self) -> &Vec<Address> {
-    //     &self.targets.iter().map(|x| x.pool).collect()
-    // }
-
-    fn build_transaction<M: Middleware>(
+    fn build_tx(
         &self,
         pools_graph: &PoolsGraph,
+        executor_address: Address,
         output_token: Address,
-        client: Arc<M>,
-        bundle_executor_address: Address,
-    ) -> ContractCall<M, ()> {
+    ) -> Bytes {
         let mut next_call = Self::build_data(
             *self.amounts_in.last().unwrap(),
             Address::zero(),
@@ -99,7 +81,7 @@ impl ArbTx {
                 self.targets[i].token_in,
                 self.targets[i].token_out,
                 next_call,
-                bundle_executor_address,
+                executor_address,
             );
             next_call = Self::build_data(self.amounts_in[i - 1], pool_address, swap_data);
         }
@@ -112,17 +94,25 @@ impl ArbTx {
             self.targets[0].token_in,
             self.targets[0].token_out,
             next_call,
-            bundle_executor_address,
+            executor_address,
         );
-        let bundle_executor_contract = QVExecutor::new(bundle_executor_address, client);
-        bundle_executor_contract.execute_bundle(
-            start_pool_addr,
-            self.amount_to_coinbase,
+
+        ExecuteBundleCall {
+            target: start_pool_addr,
+            amount_to_coinbase: self.amount_to_coinbase,
             output_token,
-            next_call,
-        )
+            data: next_call,
+        }
+            .encode()
+            .into()
     }
 
+    fn estimated_profit(&self) -> U256 {
+        self.estimated_profit
+    }
+}
+
+impl ExecutorV1 {
     #[allow(clippy::too_many_arguments)]
     pub async fn submit_transaction_flashbots(
         &self,
@@ -181,7 +171,7 @@ impl ArbTx {
                     priority_fee_percentage,
                     block_number,
                 )
-                .await
+                    .await
                 {
                     Ok(_) => (),
                     Err(e) => {
@@ -263,24 +253,16 @@ impl ArbTx {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use ethers::prelude::{Http, Provider};
     use ethers::types::{Address, U256, U64};
 
-    use crate::arbitrage::arb_tx::ArbTx;
+    use crate::arbitrage::arb_tx::ExecutorV1;
     use crate::arbitrage::arbs::ArbPool;
+    use crate::arbitrage::ExecutorTx;
     use crate::pool_data::uniswap_v2::UniswapV2;
     use crate::pools_graph::PoolsGraph;
 
     #[test]
     fn build_transaction() {
-        let client = Arc::new(
-            Provider::<Http>::try_from(
-                "https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg",
-            )
-            .unwrap(),
-        );
         let graph = PoolsGraph::default();
         let token_0 = Address::random();
         let token_1 = Address::random();
@@ -295,7 +277,7 @@ mod tests {
             U64::zero(),
             None,
         )
-        .into();
+            .into();
         let pool_2 = UniswapV2::new(
             "0xe6CE0226859f99C095c5b405BF187dC3c55Ab4D8"
                 .parse()
@@ -307,7 +289,7 @@ mod tests {
             U64::zero(),
             None,
         )
-        .into();
+            .into();
         graph.insert(pool_1);
         graph.insert(pool_2);
         let input_arb_pool = ArbPool {
@@ -325,7 +307,7 @@ mod tests {
             token_in: token_0,
             token_out: token_1,
         };
-        let arbitrage = ArbTx {
+        let arbitrage = ExecutorV1 {
             targets: vec![input_arb_pool, output_arb_pool],
             amounts_in: vec![
                 U256::from_dec_str("6314425151630").unwrap(),
@@ -337,20 +319,18 @@ mod tests {
             ],
             amount_to_coinbase: U256::zero(),
             estimated_profit: U256::zero(),
-            creation_block_number: U64::zero(),
         };
         let bundle_executor_address = "0x2f5A6dd5bCB5ba085e5f6e2DBF43a0BeA4b6fdfC"
             .parse()
             .unwrap();
-        let cc = arbitrage.build_transaction(
+        let bytes = arbitrage.build_tx(
             &graph,
+            bundle_executor_address,
             "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                 .parse()
                 .unwrap(),
-            client,
-            bundle_executor_address,
         );
-        let tx = format!("{}", cc.tx.data().unwrap());
+        let tx = format!("{}", bytes);
         assert_eq!(tx, "0x32566586000000000000000000000000615687f0ac866a61df6550a17812c71d2635bd910000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000264022c0d9f000000000000000000000000000000000000000000000000dbdb562a74bf16ef00000000000000000000000000000000000000000000000000000000000000000000000000000000000000002f5a6dd5bcb5ba085e5f6e2dbf43a0bea4b6fdfc000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000001c0000000000000000000000000000000000000000000000000000005be3111708e000000000000000000000000e6ce0226859f99c095c5b405bf187dc3c55ab4d800000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000124022c0d9f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001916dd769a2990000000000000000000000002f5a6dd5bcb5ba085e5f6e2dbf43a0bea4b6fdfc00000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000dbdb562a74bf16ef0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
     }
 }
