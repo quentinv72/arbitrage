@@ -15,12 +15,12 @@ use contracts::qv_executor::ExecuteBundleCall;
 use utils::utils::FlashbotsProvider;
 
 use crate::arbitrage::arbs::ArbPool;
-use crate::arbitrage::ExecutorTx;
+use crate::arbitrage::ArbTx;
 use crate::pool_data::pool_data::PoolDataTrait;
 use crate::pools_graph::PoolsGraph;
 
 #[derive(Eq, Debug)]
-pub struct ExecutorV1 {
+pub struct ArbTxV1 {
     targets: Vec<ArbPool>,
     amounts_in: Vec<U256>,
     amounts_out: Vec<U256>,
@@ -28,31 +28,31 @@ pub struct ExecutorV1 {
     estimated_profit: U256,
 }
 
-impl PartialEq<Self> for ExecutorV1 {
+impl PartialEq<Self> for ArbTxV1 {
     fn eq(&self, other: &Self) -> bool {
         self.estimated_profit == other.estimated_profit
     }
 }
 
-impl PartialOrd<Self> for ExecutorV1 {
+impl PartialOrd<Self> for ArbTxV1 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for ExecutorV1 {
+impl Ord for ArbTxV1 {
     fn cmp(&self, other: &Self) -> Ordering {
         self.estimated_profit.cmp(&other.estimated_profit)
     }
 }
 
-impl ExecutorTx for ExecutorV1 {
+impl ArbTx for ArbTxV1 {
     fn new(targets: Vec<ArbPool>, amounts_in: Vec<U256>, amounts_out: Vec<U256>) -> Self {
         // TODO ad logic to determine amount to send to coinbase
         // An idea is only to add coinbase when estimated profit is obviously going to be
         // substantially larger than potential gas costs.
         let estimated_profit = amounts_out.last().unwrap() - amounts_in.first().unwrap();
-        ExecutorV1 {
+        ArbTxV1 {
             targets,
             amounts_in,
             amounts_out,
@@ -112,7 +112,7 @@ impl ExecutorTx for ExecutorV1 {
     }
 }
 
-impl ExecutorV1 {
+impl ArbTxV1 {
     #[allow(clippy::too_many_arguments)]
     pub async fn submit_transaction_flashbots(
         &self,
@@ -255,9 +255,9 @@ impl ExecutorV1 {
 mod tests {
     use ethers::types::{Address, U256, U64};
 
-    use crate::arbitrage::arb_tx::ExecutorV1;
+    use crate::arbitrage::arb_tx_v1::ArbTxV1;
     use crate::arbitrage::arbs::ArbPool;
-    use crate::arbitrage::ExecutorTx;
+    use crate::arbitrage::ArbTx;
     use crate::pool_data::uniswap_v2::UniswapV2;
     use crate::pools_graph::PoolsGraph;
 
@@ -307,7 +307,7 @@ mod tests {
             token_in: token_0,
             token_out: token_1,
         };
-        let arbitrage = ExecutorV1 {
+        let arbitrage = ArbTxV1 {
             targets: vec![input_arb_pool, output_arb_pool],
             amounts_in: vec![
                 U256::from_dec_str("6314425151630").unwrap(),

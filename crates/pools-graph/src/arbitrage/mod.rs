@@ -1,25 +1,21 @@
 use ethers::addressbook::Address;
 use ethers::prelude::{Bytes, U256};
+use ethers::providers::Middleware;
 
 use crate::arbitrage::arbs::ArbPool;
 use crate::pools_graph::PoolsGraph;
 
-pub mod arb_tx;
+pub mod arb_tx_v1;
 pub mod arbs;
 
 
-pub(crate) trait ExecutorTx {
-    // Build new struct T: ExecutorTx.
+pub(crate) trait ArbTx {
     fn new(targets: Vec<ArbPool>, amounts_in: Vec<U256>, amounts_out: Vec<U256>) -> Self;
-
-    // Transforms the object into bytes.
     fn build_tx(
         &self,
         pools_graph: &PoolsGraph,
         executor_address: Address,
         output_token: Address,
     ) -> Bytes;
-
-    // Estimated profits.
     fn estimated_profit(&self) -> U256;
 }

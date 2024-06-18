@@ -8,14 +8,14 @@ use ethers::types::{Address, U256, U64};
 use revm::precompile::B256;
 use revm::primitives::{AccountInfo, alloy_primitives, Bytecode, KECCAK_EMPTY, ruint};
 
-use crate::arbitrage::ExecutorTx;
+use crate::arbitrage::ArbTx;
 use crate::pool_data::pool_data::PoolDataTrait;
 use crate::pool_data::uniswap_v3::{QUOTER_BYTECODE, QUOTER_MOCK_ADDRESS};
 use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
 use crate::pool_data::utils::EthersCacheDB;
 use crate::pools_graph::PoolsGraph;
 
-pub struct Arbs<M: Middleware, T: ExecutorTx + Ord> {
+pub struct Arbs<M: Middleware, Tx: ArbTx + Ord> {
     // All arbitrage path. This should only contain paths that may
     // have arbitrage in a given block, except for the first block where object is built.
     // would be useful to have a zero for one concept on the paths...
@@ -25,19 +25,19 @@ pub struct Arbs<M: Middleware, T: ExecutorTx + Ord> {
     // (Tx, block_number)
     // Tuples are compared lexicographically.
     // https://stackoverflow.com/questions/61322773/how-is-ordering-defined-for-tuples-in-rust
-    executor_txs: BinaryHeap<(T, U64)>,
+    executor_txs: BinaryHeap<(Tx, U64)>,
     // Used to invalidate old ExecutorV1 in executor_txs
     last_valid_tx: HashMap<Vec<ArbPool>, U64>,
     // Cache db used by REVM to compute swaps for UniswapV3, etc.
     cache_db: RefCell<EthersCacheDB<M>>,
 }
 
-impl<M, T> Arbs<M, T>
+impl<M, Tx> Arbs<M, Tx>
     where
         M: Middleware,
-        T: ExecutorTx + Ord,
+        Tx: ArbTx + Ord,
 {
-    pub fn new(paths: Vec<Vec<ArbPool>>, cache_db: EthersCacheDB<M>) -> Arbs<M, T> {
+    pub fn new(paths: Vec<Vec<ArbPool>>, cache_db: EthersCacheDB<M>) -> Arbs<M, Tx> {
         Self {
             paths,
             executor_txs: BinaryHeap::new(),
@@ -99,7 +99,7 @@ impl<M, T> Arbs<M, T>
         pools_graph: &PoolsGraph,
         max_amount_in: U256,
         num_steps: U256,
-    ) -> anyhow::Result<Option<T>> {
+    ) -> anyhow::Result<Option<Tx>> {
         let mut amount_in = U256::zero();
         let mut profitable_arbs = None;
         let mut curr_max_profit = U256::zero();
@@ -125,7 +125,7 @@ impl<M, T> Arbs<M, T>
 
             if prev_amount_in > amount_in && prev_amount_in - amount_in > curr_max_profit {
                 curr_max_profit = prev_amount_in;
-                profitable_arbs = Some(T::new(
+                profitable_arbs = Some(Tx::new(
                     arb_path.to_vec(),
                     tmp_amounts.iter().map(|x| x.0).collect(),
                     tmp_amounts.iter().map(|x| x.1).collect(),
@@ -143,7 +143,7 @@ impl<M, T> Arbs<M, T>
 impl<M, T> LoadQuoterV3<M> for Arbs<M, T>
     where
         M: Middleware,
-        T: ExecutorTx + Ord,
+        T: ArbTx + Ord,
 {
     fn load_uniswap_v3_quoter(&mut self) {
         let bytes = alloy_primitives::Bytes::from_str(QUOTER_BYTECODE).unwrap();
@@ -169,9 +169,9 @@ mod arbs_tests {
     use ethers::utils::Anvil;
     use revm::db::{CacheDB, EthersDB};
 
-    use crate::arbitrage::arb_tx::ExecutorV1;
+    use crate::arbitrage::arb_tx_v1::ArbTxV1;
     use crate::arbitrage::arbs::{ArbPool, Arbs};
-    use crate::arbitrage::ExecutorTx;
+    use crate::arbitrage::ArbTx;
     use crate::pool_data::uniswap_v2::UniswapV2;
     use crate::pool_data::uniswap_v3::UniswapV3;
     use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
@@ -240,7 +240,7 @@ mod arbs_tests {
             },
         ];
 
-        let mut arbs: Arbs<Provider<Http>, ExecutorV1> =
+        let mut arbs: Arbs<Provider<Http>, ArbTxV1> =
             Arbs::new(vec![arb_path.clone()], cache_db);
 
         arbs.load_uniswap_v3_quoter();
