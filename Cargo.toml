@@ -26,3 +26,5 @@ rayon = "1.10.0"
 criterion = { version = "0.5.1", features = ["async_tokio"] }
 revm = { version = "9.0.0", features = ["ethersdb"] }
 anyhow = "1.0.86"
+thiserror = "1.0.61"
+async-trait = "0.1.80"

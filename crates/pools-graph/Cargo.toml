@@ -17,6 +17,7 @@ ethers-flashbots.workspace = true
 revm.workspace = true
 anyhow.workspace = true
 rayon.workspace = true
+thiserror.workspace = true
 serde = { version = "1.0.198", features = ["derive"] }
 reqwest-graphql = "1.0.0"
 enum_dispatch = "0.3.13"

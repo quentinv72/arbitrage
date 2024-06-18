@@ -6,12 +6,12 @@ use std::str::FromStr;
 use ethers::providers::Middleware;
 use ethers::types::{Address, U256, U64};
 use revm::precompile::B256;
-use revm::primitives::{AccountInfo, alloy_primitives, Bytecode, KECCAK_EMPTY, ruint};
+use revm::primitives::{alloy_primitives, ruint, AccountInfo, Bytecode, KECCAK_EMPTY};
 
 use crate::arbitrage::ArbTx;
 use crate::pool_data::pool_data::PoolDataTrait;
-use crate::pool_data::uniswap_v3::{QUOTER_BYTECODE, QUOTER_MOCK_ADDRESS};
 use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
+use crate::pool_data::uniswap_v3::{QUOTER_BYTECODE, QUOTER_MOCK_ADDRESS};
 use crate::pool_data::utils::EthersCacheDB;
 use crate::pools_graph::PoolsGraph;
 
@@ -33,9 +33,9 @@ pub struct Arbs<M: Middleware, Tx: ArbTx + Ord> {
 }
 
 impl<M, Tx> Arbs<M, Tx>
-    where
-        M: Middleware,
-        Tx: ArbTx + Ord,
+where
+    M: Middleware,
+    Tx: ArbTx + Ord,
 {
     pub fn new(paths: Vec<Vec<ArbPool>>, cache_db: EthersCacheDB<M>) -> Arbs<M, Tx> {
         Self {
@@ -141,9 +141,9 @@ impl<M, Tx> Arbs<M, Tx>
 }
 
 impl<M, T> LoadQuoterV3<M> for Arbs<M, T>
-    where
-        M: Middleware,
-        T: ArbTx + Ord,
+where
+    M: Middleware,
+    T: ArbTx + Ord,
 {
     fn load_uniswap_v3_quoter(&mut self) {
         let bytes = alloy_primitives::Bytes::from_str(QUOTER_BYTECODE).unwrap();
@@ -184,8 +184,8 @@ mod arbs_tests {
     use crate::arbitrage::arbs::{ArbPool, Arbs};
     use crate::arbitrage::ArbTx;
     use crate::pool_data::uniswap_v2::UniswapV2;
-    use crate::pool_data::uniswap_v3::UniswapV3;
     use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
+    use crate::pool_data::uniswap_v3::UniswapV3;
     use crate::pools_graph::PoolsGraph;
 
     #[tokio::test(flavor = "multi_thread")]
@@ -251,8 +251,7 @@ mod arbs_tests {
             },
         ];
 
-        let mut arbs: Arbs<Provider<Http>, ArbTxV1> =
-            Arbs::new(vec![arb_path.clone()], cache_db);
+        let mut arbs: Arbs<Provider<Http>, ArbTxV1> = Arbs::new(vec![arb_path.clone()], cache_db);
 
         arbs.load_uniswap_v3_quoter();
 
