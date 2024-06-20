@@ -61,7 +61,7 @@ impl ArbTx for ArbTxV1 {
         }
     }
 
-    fn build_tx(
+    fn get_bytes(
         &self,
         pools_graph: &PoolsGraph,
         executor_address: Address,
@@ -109,6 +109,10 @@ impl ArbTx for ArbTxV1 {
 
     fn estimated_profit(&self) -> U256 {
         self.estimated_profit
+    }
+
+    fn amount_to_coinbase(&mut self, amount: U256) {
+        self.amount_to_coinbase = amount
     }
 }
 
@@ -323,7 +327,7 @@ mod tests {
         let bundle_executor_address = "0x2f5A6dd5bCB5ba085e5f6e2DBF43a0BeA4b6fdfC"
             .parse()
             .unwrap();
-        let bytes = arbitrage.build_tx(
+        let bytes = arbitrage.get_bytes(
             &graph,
             bundle_executor_address,
             "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
