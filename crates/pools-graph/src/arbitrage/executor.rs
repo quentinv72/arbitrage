@@ -16,8 +16,7 @@ use crate::arbitrage::ArbTx;
 use crate::arbitrage::executor::ExecutorError::LockError;
 use crate::pools_graph::PoolsGraph;
 
-// Handler can be used to submit transactions of type TX to a network via
-//  a given provider M.
+// Handler can be used to submit transactions of type TX to a network via a given provider M.
 trait Handler<M, TX>
     where
         M: Middleware,
@@ -34,26 +33,31 @@ trait Handler<M, TX>
 
 #[derive(Error, Debug)]
 pub enum ExecutorError<M: Middleware> {
+    // Sender address is locked because it is being used
+    // to send a tx.
     #[error("All addresses are locked")]
     LockError,
 
+    // Error occured during gas estimation.
     #[error(transparent)]
     GasEstimationError(#[from] SignerMiddlewareError<M::Inner, Wallet<SigningKey>>),
 
+    // Error occuring when signing tx.
     #[error(transparent)]
     WalletError(#[from] WalletError),
 
+    // TX is not profitable enough after calculating gas fees.
     #[error("Transaction does not generate high enough profits to submit to network")]
     NotEnoughProfitError,
 
+    // Flashbots middleware error. Shouldnt be here but cant figure out where esle to put it.
     #[error("Error from flashbots middleware: {0}")]
     FlashbotsMiddlewareError(String),
 
+    // Pending Flashbot bundle error. Shouldn't be here either, but can't figure out
+    // where else to put it.
     #[error(transparent)]
     PendingBundleError(#[from] PendingBundleError),
-
-    #[error(transparent)]
-    OtherError(#[from] anyhow::Error),
 }
 
 pub struct Executor<M: Middleware> {
