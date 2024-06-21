@@ -1,5 +1,6 @@
+use std::future::Future;
 use std::ops::Mul;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use ethers::core::k256::ecdsa::SigningKey;
 use ethers::middleware::signer::SignerMiddlewareError;
@@ -17,18 +18,18 @@ use crate::arbitrage::executor::ExecutorError::LockError;
 use crate::pools_graph::PoolsGraph;
 
 // Handler can be used to submit transactions of type TX to a network via a given provider M.
-trait Handler<M, TX>
+pub trait Handler<M, TX>
     where
         M: Middleware,
         TX: ArbTx,
 {
-    async fn execute(
+    fn execute(
         &self,
-        tx: &mut TX,
+        tx: &TX,
         pools_graph: &PoolsGraph,
         block_number: U64,
         next_block_base_fee: U256,
-    ) -> Result<(), ExecutorError<M>>;
+    ) -> impl Future<Output=Result<(), ExecutorError<M>>> + Send;
 }
 
 #[derive(Error, Debug)]
@@ -38,11 +39,11 @@ pub enum ExecutorError<M: Middleware> {
     #[error("All addresses are locked")]
     LockError,
 
-    // Error occured during gas estimation.
+    // Error occurred during gas estimation.
     #[error(transparent)]
     GasEstimationError(#[from] SignerMiddlewareError<M::Inner, Wallet<SigningKey>>),
 
-    // Error occuring when signing tx.
+    // Error occurring when signing tx.
     #[error(transparent)]
     WalletError(#[from] WalletError),
 
@@ -60,14 +61,26 @@ pub enum ExecutorError<M: Middleware> {
     PendingBundleError(#[from] PendingBundleError),
 }
 
-pub struct Executor<M: Middleware> {
-    client: M,
-    executor_address: Address,
-    senders: Vec<Mutex<Address>>,
-    output_token: Address,
-    chain_id: U64,
-    priority_fee_percentage: u32,
-    coinbase_threshold: U256,
+#[derive(Default)]
+pub struct Executor<M> {
+    // Client to connect to the network.
+    pub client: Arc<M>,
+    // Address of the contract that will execute the transaction.
+    pub executor_address: Address,
+    // List of addresses that are authorized to call the `self.executor_address`.
+    // They are guarded by a mutex to avoid having to manage nonces. Each sender can only
+    // send 1 tx per block.
+    pub senders: Vec<Mutex<Address>>,
+    // Token that is sent back to the contract owner at the end of the transaction.
+    pub output_token: Address,
+    // Chain ID.
+    pub chain_id: U64,
+    // Percentage of the profit that should be used as priority fee.
+    pub priority_fee_percentage: u32,
+    // Threshold at which the transaction should send coinbase to the validator rather than using
+    // priority fee field on the request. This is mostly for transactions
+    // that are highly profitable.
+    pub coinbase_threshold: U256,
 }
 
 impl<M: Middleware> Executor<M> {
@@ -88,11 +101,11 @@ impl<M: Middleware> Executor<M> {
 
 impl<TX> Handler<FlashbotsProvider, TX> for Executor<FlashbotsProvider>
     where
-        TX: ArbTx,
+        TX: ArbTx + Send + Sync,
 {
     async fn execute(
         &self,
-        tx: &mut TX,
+        tx: &TX,
         pools_graph: &PoolsGraph,
         block_number: U64,
         next_block_base_fee: U256,
@@ -140,5 +153,20 @@ impl<TX> Handler<FlashbotsProvider, TX> for Executor<FlashbotsProvider>
             }
         }
         Ok(())
+    }
+}
+
+impl<TX> Handler<Provider<Http>, TX> for Executor<Provider<Http>>
+    where
+        TX: ArbTx + Send + Sync,
+{
+    async fn execute(
+        &self,
+        _tx: &TX,
+        _pools_graph: &PoolsGraph,
+        _block_number: U64,
+        _next_block_base_fee: U256,
+    ) -> Result<(), ExecutorError<Provider<Http>>> {
+        todo!()
     }
 }
