@@ -1,5 +1,5 @@
 use std::future::Future;
-use std::ops::Mul;
+use std::ops::{Div, Mul};
 use std::sync::{Arc, Mutex};
 
 use ethers::core::k256::ecdsa::SigningKey;
@@ -25,7 +25,7 @@ pub trait Handler<M, TX>
 {
     fn execute(
         &self,
-        tx: &TX,
+        tx: &mut TX,
         pools_graph: &PoolsGraph,
         block_number: U64,
         next_block_base_fee: U256,
@@ -75,8 +75,8 @@ pub struct Executor<M> {
     pub output_token: Address,
     // Chain ID.
     pub chain_id: U64,
-    // Percentage of the profit that should be used as priority fee.
-    pub priority_fee_percentage: u32,
+    // Percentage of the profit that should be as tip.
+    pub tip_percentage: u32,
     // Threshold at which the transaction should send coinbase to the validator rather than using
     // priority fee field on the request. This is mostly for transactions
     // that are highly profitable.
@@ -95,7 +95,7 @@ impl<M: Middleware> Executor<M> {
                 }
             }
         }
-        return Err(LockError);
+        Err(LockError)
     }
 }
 
@@ -105,7 +105,7 @@ impl<TX> Handler<FlashbotsProvider, TX> for Executor<FlashbotsProvider>
 {
     async fn execute(
         &self,
-        tx: &TX,
+        tx: &mut TX,
         pools_graph: &PoolsGraph,
         block_number: U64,
         next_block_base_fee: U256,
@@ -122,14 +122,23 @@ impl<TX> Handler<FlashbotsProvider, TX> for Executor<FlashbotsProvider>
             .estimate_gas(&(eip_1559_tx.clone().into()), None)
             .await?;
         if gas_estimate.mul(next_block_base_fee) >= tx.estimated_profit() {
-            return Err(ExecutorError::<FlashbotsProvider>::NotEnoughProfitError.into());
+            return Err(ExecutorError::<FlashbotsProvider>::NotEnoughProfitError);
         }
 
         eip_1559_tx = eip_1559_tx.gas(gas_estimate);
-        let mut effective_profit = gas_estimate.mul(next_block_base_fee) - tx.estimated_profit();
-        if effective_profit > self.coinbase_threshold {
-            todo!("Calculate coinbase");
-            todo!("Calculate priority fees and set them on eip tx");
+        let profit = gas_estimate.mul(next_block_base_fee) - tx.estimated_profit();
+        let tip = profit.mul(U256::from(self.tip_percentage)).div(U256::from(10_000));
+
+        // Set coinbase if not already set and update EIP1559 transaction
+        if profit > self.coinbase_threshold && tx.get_amount_to_coinbase().is_zero() {
+            tx.set_amount_to_coinbase(tip);
+            eip_1559_tx = eip_1559_tx.data(tx.get_bytes(pools_graph, self.executor_address, self.output_token));
+        }
+
+        // If coinbase is zero, pay tip as part of tx fees
+        if tx.get_amount_to_coinbase().is_zero() {
+            let tip_per_gas = tip.div(gas_estimate);
+            eip_1559_tx = eip_1559_tx.max_priority_fee_per_gas(tip_per_gas).max_fee_per_gas(tip_per_gas + next_block_base_fee);
         }
 
         let typed_tx: TypedTransaction = eip_1559_tx.into();
@@ -162,7 +171,7 @@ impl<TX> Handler<Provider<Http>, TX> for Executor<Provider<Http>>
 {
     async fn execute(
         &self,
-        _tx: &TX,
+        _tx: &mut TX,
         _pools_graph: &PoolsGraph,
         _block_number: U64,
         _next_block_base_fee: U256,

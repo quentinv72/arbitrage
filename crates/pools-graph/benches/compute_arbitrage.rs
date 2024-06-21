@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
+use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
+use ethers::addressbook::Address;
 use ethers::prelude::{Http, Provider, U256, U64};
 use ethers::utils::WEI_IN_ETHER;
 use revm::db::{CacheDB, EthersDB};
@@ -8,8 +9,8 @@ use revm::db::{CacheDB, EthersDB};
 use pools_graph::arbitrage::arb_tx_v1::ArbTxV1;
 use pools_graph::arbitrage::arbs::{ArbPool, Arbs};
 use pools_graph::arbitrage::executor::Executor;
-use pools_graph::pool_data::uniswap_v3::utils::LoadQuoterV3;
 use pools_graph::pool_data::uniswap_v3::UniswapV3;
+use pools_graph::pool_data::uniswap_v3::utils::LoadQuoterV3;
 use pools_graph::pools_graph::PoolsGraph;
 
 fn bench_compute_all_arbitrage_2_v3_pools(c: &mut Criterion) {
@@ -33,11 +34,22 @@ fn bench_compute_all_arbitrage_2_v3_pools(c: &mut Criterion) {
     }
 }
 
-fn setup_arb() -> (Arbs<Provider<Http>, ArbTxV1>, PoolsGraph) {
+#[allow(clippy::type_complexity)]
+fn setup_arb() -> (Arbs<Provider<Http>, ArbTxV1, Executor<Provider<Http>>>, PoolsGraph) {
     let provider = Arc::new(Provider::<Http>::try_from("http://localhost:8545").unwrap());
 
     let ethers_db = EthersDB::new(provider.clone(), None).unwrap();
     let cache_db = CacheDB::new(ethers_db);
+
+    let default_executor = Executor {
+        client: provider,
+        executor_address: Address::random(),
+        senders: Vec::new(),
+        output_token: Address::random(),
+        chain_id: U64::zero(),
+        tip_percentage: Default::default(),
+        coinbase_threshold: U256::one(),
+    };
 
     let uniswap_v3_pool = UniswapV3 {
         pool_address: "0xb457fcd59cbe5cb116d1f649fa0f921b42557aef"
@@ -68,7 +80,7 @@ fn setup_arb() -> (Arbs<Provider<Http>, ArbTxV1>, PoolsGraph) {
         },
     ];
 
-    let arbs = Arbs::new(vec![arb_path_1], cache_db, Executor::default());
+    let arbs = Arbs::new(vec![arb_path_1], cache_db, default_executor);
     (arbs, pools_graph)
 }
 

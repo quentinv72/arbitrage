@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
-use ethers::abi::AbiEncode;
 use ethers::abi::{encode, Token};
+use ethers::abi::AbiEncode;
 use ethers::types::{Address, Bytes, U256};
 
 use contracts::qv_executor::ExecuteBundleCall;
@@ -95,16 +95,20 @@ impl ArbTx for ArbTxV1 {
             output_token,
             data: next_call,
         }
-        .encode()
-        .into()
+            .encode()
+            .into()
     }
 
     fn estimated_profit(&self) -> U256 {
         self.estimated_profit
     }
 
-    fn amount_to_coinbase(&mut self, amount: U256) {
+    fn set_amount_to_coinbase(&mut self, amount: U256) {
         self.amount_to_coinbase = amount
+    }
+
+    fn get_amount_to_coinbase(&self) -> U256 {
+        self.amount_to_coinbase
     }
 
     fn path(&self) -> &[ArbPool] {
@@ -148,7 +152,7 @@ mod tests {
             U64::zero(),
             None,
         )
-        .into();
+            .into();
         let pool_2 = UniswapV2::new(
             "0xe6CE0226859f99C095c5b405BF187dC3c55Ab4D8"
                 .parse()
@@ -160,7 +164,7 @@ mod tests {
             U64::zero(),
             None,
         )
-        .into();
+            .into();
         graph.insert(pool_1);
         graph.insert(pool_2);
         let input_arb_pool = ArbPool {

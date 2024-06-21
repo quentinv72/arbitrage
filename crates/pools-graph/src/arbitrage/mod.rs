@@ -17,6 +17,7 @@ pub trait ArbTx {
         output_token: Address,
     ) -> Bytes;
     fn estimated_profit(&self) -> U256;
-    fn amount_to_coinbase(&mut self, amount: U256);
+    fn set_amount_to_coinbase(&mut self, amount: U256);
+    fn get_amount_to_coinbase(&self) -> U256;
     fn path(&self) -> &[ArbPool];
 }

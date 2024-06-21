@@ -85,7 +85,7 @@ impl<M, Tx, Executor> Arbs<M, Tx, Executor>
         let mut results = JoinSet::new();
         let next_block_base_fee = block.next_block_base_fee().unwrap();
         let block_number = block.number.unwrap();
-        while let Some((tx, creation_block_number)) = self.txs.pop() {
+        while let Some((mut tx, creation_block_number)) = self.txs.pop() {
             let last_valid_tx_block_number = self
                 .last_valid_tx
                 .get(tx.path())
@@ -98,7 +98,7 @@ impl<M, Tx, Executor> Arbs<M, Tx, Executor>
             let graph_clone = Arc::clone(&pools_graph);
             results.spawn(async move {
                 let transaction_execution = executor
-                    .execute(&tx, &graph_clone, block_number, next_block_base_fee)
+                    .execute(&mut tx, &graph_clone, block_number, next_block_base_fee)
                     .await;
                 (tx, transaction_execution)
             });
@@ -313,7 +313,7 @@ mod arbs_tests {
             senders: Vec::new(),
             output_token: Address::random(),
             chain_id: U64::zero(),
-            priority_fee_percentage: Default::default(),
+            tip_percentage: Default::default(),
             coinbase_threshold: U256::one(),
         };
         let mut arbs: Arbs<Provider<Http>, ArbTxV1, Executor<Provider<Http>>> = Arbs::new(
