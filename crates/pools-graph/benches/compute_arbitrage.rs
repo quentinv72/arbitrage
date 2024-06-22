@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use ethers::addressbook::Address;
 use ethers::prelude::{Http, Provider, U256, U64};
 use ethers::utils::WEI_IN_ETHER;
@@ -9,8 +9,8 @@ use revm::db::{CacheDB, EthersDB};
 use pools_graph::arbitrage::arb_tx_v1::ArbTxV1;
 use pools_graph::arbitrage::arbs::{ArbPool, Arbs};
 use pools_graph::arbitrage::executor::Executor;
-use pools_graph::pool_data::uniswap_v3::UniswapV3;
 use pools_graph::pool_data::uniswap_v3::utils::LoadQuoterV3;
+use pools_graph::pool_data::uniswap_v3::UniswapV3;
 use pools_graph::pools_graph::PoolsGraph;
 
 fn bench_compute_all_arbitrage_2_v3_pools(c: &mut Criterion) {
@@ -35,7 +35,10 @@ fn bench_compute_all_arbitrage_2_v3_pools(c: &mut Criterion) {
 }
 
 #[allow(clippy::type_complexity)]
-fn setup_arb() -> (Arbs<Provider<Http>, ArbTxV1, Executor<Provider<Http>>>, PoolsGraph) {
+fn setup_arb() -> (
+    Arbs<Provider<Http>, ArbTxV1, Executor<Provider<Http>>>,
+    PoolsGraph,
+) {
     let provider = Arc::new(Provider::<Http>::try_from("http://localhost:8545").unwrap());
 
     let ethers_db = EthersDB::new(provider.clone(), None).unwrap();

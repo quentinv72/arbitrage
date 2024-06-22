@@ -57,8 +57,14 @@ pub enum ExecutorError<M: Middleware> {
 
     // Pending Flashbot bundle error. Shouldn't be here either, but can't figure out
     // where else to put it.
-    #[error(transparent)]
-    PendingBundleError(#[from] PendingBundleError),
+    #[error("Bundle was not included")]
+    PendingBundleError {
+        error: PendingBundleError,
+        base_fee: U256,
+        max_priority_fee_per_gas: U256,
+        max_fee_per_gas: U256,
+        coinbase: U256,
+    },
 }
 
 #[derive(Default)]
@@ -84,6 +90,7 @@ pub struct Executor<M> {
 }
 
 impl<M: Middleware> Executor<M> {
+    #[allow(clippy::result_large_err)]
     fn next_available_sender(&self) -> Result<Address, ExecutorError<M>> {
         for sender in &self.senders {
             match sender.try_lock() {
@@ -127,18 +134,25 @@ impl<TX> Handler<FlashbotsProvider, TX> for Executor<FlashbotsProvider>
 
         eip_1559_tx = eip_1559_tx.gas(gas_estimate);
         let profit = gas_estimate.mul(next_block_base_fee) - tx.estimated_profit();
-        let tip = profit.mul(U256::from(self.tip_percentage)).div(U256::from(10_000));
+        let tip = profit
+            .mul(U256::from(self.tip_percentage))
+            .div(U256::from(10_000));
 
         // Set coinbase if not already set and update EIP1559 transaction
         if profit > self.coinbase_threshold && tx.get_amount_to_coinbase().is_zero() {
             tx.set_amount_to_coinbase(tip);
-            eip_1559_tx = eip_1559_tx.data(tx.get_bytes(pools_graph, self.executor_address, self.output_token));
+            eip_1559_tx = eip_1559_tx
+                .data(tx.get_bytes(pools_graph, self.executor_address, self.output_token))
+                .max_priority_fee_per_gas(U256::zero())
+                .max_fee_per_gas(next_block_base_fee);
         }
 
         // If coinbase is zero, pay tip as part of tx fees
         if tx.get_amount_to_coinbase().is_zero() {
             let tip_per_gas = tip.div(gas_estimate);
-            eip_1559_tx = eip_1559_tx.max_priority_fee_per_gas(tip_per_gas).max_fee_per_gas(tip_per_gas + next_block_base_fee);
+            eip_1559_tx = eip_1559_tx
+                .max_priority_fee_per_gas(tip_per_gas)
+                .max_fee_per_gas(tip_per_gas + next_block_base_fee);
         }
 
         let typed_tx: TypedTransaction = eip_1559_tx.into();
@@ -157,8 +171,26 @@ impl<TX> Handler<FlashbotsProvider, TX> for Executor<FlashbotsProvider>
         for result in results {
             let pending_bundle =
                 result.map_err(|err| ExecutorError::FlashbotsMiddlewareError(format!("{err}")))?;
-            if let Some(bundle_hash) = pending_bundle.await? {
-                info!("Bundle with hash {bundle_hash:?} was included in target block")
+            let bundle_hash =
+                pending_bundle
+                    .await
+                    .map_err(|err| ExecutorError::PendingBundleError {
+                        error: err,
+                        base_fee: next_block_base_fee,
+                        max_priority_fee_per_gas: typed_tx
+                            .as_eip1559_ref()
+                            .unwrap()
+                            .max_priority_fee_per_gas
+                            .unwrap(),
+                        max_fee_per_gas: typed_tx
+                            .as_eip1559_ref()
+                            .unwrap()
+                            .max_fee_per_gas
+                            .unwrap(),
+                        coinbase: tx.get_amount_to_coinbase(),
+                    })?;
+            if let Some(b_hash) = bundle_hash {
+                info!("Bundle with hash {b_hash:?} was included in target block")
             }
         }
         Ok(())

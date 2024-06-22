@@ -7,17 +7,16 @@ use std::sync::Arc;
 
 use ethers::providers::Middleware;
 use ethers::types::{Address, Block, U256, U64};
-use ethers_flashbots::PendingBundleError;
 use log::error;
 use revm::precompile::B256;
-use revm::primitives::{AccountInfo, alloy_primitives, Bytecode, KECCAK_EMPTY, ruint};
+use revm::primitives::{alloy_primitives, ruint, AccountInfo, Bytecode, KECCAK_EMPTY};
 use tokio::task::JoinSet;
 
-use crate::arbitrage::ArbTx;
 use crate::arbitrage::executor::{ExecutorError, Handler};
+use crate::arbitrage::ArbTx;
 use crate::pool_data::pool_data::PoolDataTrait;
-use crate::pool_data::uniswap_v3::{QUOTER_BYTECODE, QUOTER_MOCK_ADDRESS};
 use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
+use crate::pool_data::uniswap_v3::{QUOTER_BYTECODE, QUOTER_MOCK_ADDRESS};
 use crate::pool_data::utils::EthersCacheDB;
 use crate::pools_graph::PoolsGraph;
 
@@ -41,10 +40,10 @@ pub struct Arbs<M: Middleware, Tx, Executor> {
 }
 
 impl<M, Tx, Executor> Arbs<M, Tx, Executor>
-    where
-        M: Middleware + 'static,
-        Tx: ArbTx + Debug + Ord + Send + 'static,
-        Executor: Handler<M, Tx> + Send + Sync + 'static,
+where
+    M: Middleware + 'static,
+    Tx: ArbTx + Debug + Ord + Send + 'static,
+    Executor: Handler<M, Tx> + Send + Sync + 'static,
 {
     pub fn new(
         paths: Vec<Vec<ArbPool>>,
@@ -113,8 +112,19 @@ impl<M, Tx, Executor> Arbs<M, Tx, Executor>
                 Err(ExecutorError::NotEnoughProfitError | ExecutorError::LockError) => {
                     self.txs.push((tx, block_number))
                 }
-                Err(ExecutorError::PendingBundleError(PendingBundleError::BundleNotIncluded)) => {
-                    error!("Bundle was not included in target block for tx {tx:#?}")
+                Err(ExecutorError::PendingBundleError {
+                    error,
+                    base_fee,
+                    max_priority_fee_per_gas,
+                    max_fee_per_gas,
+                    coinbase,
+                }) => {
+                    error!(
+                    "Bundle was not included in target block for tx {tx:#?} because of {error:?} \n\
+                    base_fee: {base_fee},\n\
+                    max_priority_fee_per_gas: {max_priority_fee_per_gas},\n\
+                    max_fee_per_gas: {max_fee_per_gas},\n\
+                    coinbase: {coinbase}")
                 }
                 Err(other) => return Err(other.into()),
             }
@@ -197,8 +207,8 @@ impl<M, Tx, Executor> Arbs<M, Tx, Executor>
 }
 
 impl<M, T, U> LoadQuoterV3<M> for Arbs<M, T, U>
-    where
-        M: Middleware,
+where
+    M: Middleware,
 {
     fn load_uniswap_v3_quoter(&mut self) {
         let bytes = alloy_primitives::Bytes::from_str(QUOTER_BYTECODE).unwrap();
@@ -237,11 +247,11 @@ mod arbs_tests {
 
     use crate::arbitrage::arb_tx_v1::ArbTxV1;
     use crate::arbitrage::arbs::{ArbPool, Arbs};
-    use crate::arbitrage::ArbTx;
     use crate::arbitrage::executor::Executor;
+    use crate::arbitrage::ArbTx;
     use crate::pool_data::uniswap_v2::UniswapV2;
-    use crate::pool_data::uniswap_v3::UniswapV3;
     use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
+    use crate::pool_data::uniswap_v3::UniswapV3;
     use crate::pools_graph::PoolsGraph;
 
     #[tokio::test(flavor = "multi_thread")]
@@ -316,11 +326,8 @@ mod arbs_tests {
             tip_percentage: Default::default(),
             coinbase_threshold: U256::one(),
         };
-        let mut arbs: Arbs<Provider<Http>, ArbTxV1, Executor<Provider<Http>>> = Arbs::new(
-            vec![arb_path.clone()],
-            cache_db,
-            default_executor,
-        );
+        let mut arbs: Arbs<Provider<Http>, ArbTxV1, Executor<Provider<Http>>> =
+            Arbs::new(vec![arb_path.clone()], cache_db, default_executor);
 
         arbs.load_uniswap_v3_quoter();
 
