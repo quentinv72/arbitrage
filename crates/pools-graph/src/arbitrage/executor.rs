@@ -5,23 +5,23 @@ use std::sync::{Arc, Mutex};
 use ethers::core::k256::ecdsa::SigningKey;
 use ethers::middleware::signer::SignerMiddlewareError;
 use ethers::prelude::*;
-use ethers::types::{Address, U256, U64};
 use ethers::types::transaction::eip2718::TypedTransaction;
+use ethers::types::{Address, U256, U64};
 use ethers_flashbots::{BundleRequest, PendingBundleError};
 use log::info;
 use thiserror::Error;
 
 use utils::utils::FlashbotsProvider;
 
-use crate::arbitrage::ArbTx;
 use crate::arbitrage::executor::ExecutorError::LockError;
+use crate::arbitrage::ArbTx;
 use crate::pools_graph::PoolsGraph;
 
 // Handler can be used to submit transactions of type TX to a network via a given provider M.
 pub trait Handler<M, TX>
-    where
-        M: Middleware,
-        TX: ArbTx,
+where
+    M: Middleware,
+    TX: ArbTx,
 {
     fn execute(
         &self,
@@ -29,7 +29,7 @@ pub trait Handler<M, TX>
         pools_graph: &PoolsGraph,
         block_number: U64,
         next_block_base_fee: U256,
-    ) -> impl Future<Output=Result<(), ExecutorError<M>>> + Send;
+    ) -> impl Future<Output = Result<(), ExecutorError<M>>> + Send;
 }
 
 #[derive(Error, Debug)]
@@ -81,7 +81,7 @@ pub struct Executor<M> {
     pub output_token: Address,
     // Chain ID.
     pub chain_id: U64,
-    // Percentage of the profit that should be as tip.
+    // Percentage of the profit that should be as tip. Must be a value between 0 and 10_000.
     pub tip_percentage: u32,
     // Threshold at which the transaction should send coinbase to the validator rather than using
     // priority fee field on the request. This is mostly for transactions
@@ -107,8 +107,8 @@ impl<M: Middleware> Executor<M> {
 }
 
 impl<TX> Handler<FlashbotsProvider, TX> for Executor<FlashbotsProvider>
-    where
-        TX: ArbTx + Send + Sync,
+where
+    TX: ArbTx + Send + Sync,
 {
     async fn execute(
         &self,
@@ -198,8 +198,8 @@ impl<TX> Handler<FlashbotsProvider, TX> for Executor<FlashbotsProvider>
 }
 
 impl<TX> Handler<Provider<Http>, TX> for Executor<Provider<Http>>
-    where
-        TX: ArbTx + Send + Sync,
+where
+    TX: ArbTx + Send + Sync,
 {
     async fn execute(
         &self,
