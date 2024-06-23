@@ -1,21 +1,26 @@
 use std::cell::RefCell;
 use std::collections::{BinaryHeap, HashMap};
+use std::fmt::Debug;
 use std::ops::Div;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use ethers::providers::Middleware;
-use ethers::types::{Address, U256, U64};
+use ethers::types::{Address, Block, U256, U64};
+use log::error;
 use revm::precompile::B256;
-use revm::primitives::{AccountInfo, alloy_primitives, Bytecode, KECCAK_EMPTY, ruint};
+use revm::primitives::{alloy_primitives, ruint, AccountInfo, Bytecode, KECCAK_EMPTY};
+use tokio::task::JoinSet;
 
+use crate::arbitrage::executor::{ExecutorError, Handler};
 use crate::arbitrage::ArbTx;
 use crate::pool_data::pool_data::PoolDataTrait;
-use crate::pool_data::uniswap_v3::{QUOTER_BYTECODE, QUOTER_MOCK_ADDRESS};
 use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
+use crate::pool_data::uniswap_v3::{QUOTER_BYTECODE, QUOTER_MOCK_ADDRESS};
 use crate::pool_data::utils::EthersCacheDB;
 use crate::pools_graph::PoolsGraph;
 
-pub struct Arbs<M: Middleware, Tx: ArbTx + Ord> {
+pub struct Arbs<M: Middleware, Tx, Executor> {
     // All arbitrage path. This should only contain paths that may
     // have arbitrage in a given block, except for the first block where object is built.
     // would be useful to have a zero for one concept on the paths...
@@ -25,24 +30,32 @@ pub struct Arbs<M: Middleware, Tx: ArbTx + Ord> {
     // (Tx, block_number)
     // Tuples are compared lexicographically.
     // https://stackoverflow.com/questions/61322773/how-is-ordering-defined-for-tuples-in-rust
-    executor_txs: BinaryHeap<(Tx, U64)>,
-    // Used to invalidate old ExecutorV1 in executor_txs
+    txs: BinaryHeap<(Tx, U64)>,
+    // Used to invalidate old transactions in txs
     last_valid_tx: HashMap<Vec<ArbPool>, U64>,
     // Cache db used by REVM to compute swaps for UniswapV3, etc.
     cache_db: RefCell<EthersCacheDB<M>>,
+    // Executor used to manage transaction submission to the network.
+    executor: Arc<Executor>,
 }
 
-impl<M, Tx> Arbs<M, Tx>
-    where
-        M: Middleware,
-        Tx: ArbTx + Ord,
+impl<M, Tx, Executor> Arbs<M, Tx, Executor>
+where
+    M: Middleware + 'static,
+    Tx: ArbTx + Debug + Ord + Send + 'static,
+    Executor: Handler<M, Tx> + Send + Sync + 'static,
 {
-    pub fn new(paths: Vec<Vec<ArbPool>>, cache_db: EthersCacheDB<M>) -> Arbs<M, Tx> {
+    pub fn new(
+        paths: Vec<Vec<ArbPool>>,
+        cache_db: EthersCacheDB<M>,
+        executor: Executor,
+    ) -> Arbs<M, Tx, Executor> {
         Self {
             paths,
-            executor_txs: BinaryHeap::new(),
+            txs: BinaryHeap::new(),
             last_valid_tx: HashMap::new(),
             cache_db: RefCell::new(cache_db),
+            executor: Arc::new(executor),
         }
     }
 
@@ -63,6 +76,62 @@ impl<M, Tx> Arbs<M, Tx>
             .insert(B256::ZERO, Bytecode::default());
     }
 
+    pub async fn submit_txs<T>(
+        &mut self,
+        pools_graph: Arc<PoolsGraph>,
+        block: Block<T>,
+    ) -> anyhow::Result<()> {
+        let mut results = JoinSet::new();
+        let next_block_base_fee = block.next_block_base_fee().unwrap();
+        let block_number = block.number.unwrap();
+        while let Some((mut tx, creation_block_number)) = self.txs.pop() {
+            let last_valid_tx_block_number = self
+                .last_valid_tx
+                .get(tx.path())
+                .expect("Every path should have a last valid block number.");
+            // Skip arbitrage if it is old and no longer valid
+            if creation_block_number < *last_valid_tx_block_number {
+                continue;
+            }
+            let executor = Arc::clone(&self.executor);
+            let graph_clone = Arc::clone(&pools_graph);
+            results.spawn(async move {
+                let transaction_execution = executor
+                    .execute(&mut tx, &graph_clone, block_number, next_block_base_fee)
+                    .await;
+                (tx, transaction_execution)
+            });
+        }
+        while let Some(result) = results.join_next().await {
+            let (tx, res) = result.unwrap();
+            match res {
+                Ok(()) => continue,
+                Err(ExecutorError::GasEstimationError(err)) => {
+                    error!("{tx:#?} got a gas estimation error {err}")
+                }
+                Err(ExecutorError::NotEnoughProfitError | ExecutorError::LockError) => {
+                    self.txs.push((tx, block_number))
+                }
+                Err(ExecutorError::PendingBundleError {
+                    error,
+                    base_fee,
+                    max_priority_fee_per_gas,
+                    max_fee_per_gas,
+                    coinbase,
+                }) => {
+                    error!(
+                    "Bundle was not included in target block for tx {tx:#?} because of {error:?} \n\
+                    base_fee: {base_fee},\n\
+                    max_priority_fee_per_gas: {max_priority_fee_per_gas},\n\
+                    max_fee_per_gas: {max_fee_per_gas},\n\
+                    coinbase: {coinbase}")
+                }
+                Err(other) => return Err(other.into()),
+            }
+        }
+        Ok(())
+    }
+
     pub fn compute_all_arbitrages(
         &mut self,
         pools_graph: &PoolsGraph,
@@ -80,7 +149,7 @@ impl<M, Tx> Arbs<M, Tx>
             match arb_tx {
                 Some(arb) => {
                     // add arb tx to heap
-                    self.executor_txs.push((arb, block_number));
+                    self.txs.push((arb, block_number));
                     // invalidate other arb tx on that path from previous blocks that
                     // may still be on the heap.
                     self.last_valid_tx.insert(arb_path.to_vec(), block_number);
@@ -129,9 +198,6 @@ impl<M, Tx> Arbs<M, Tx>
                     arb_path.to_vec(),
                     tmp_amounts.iter().map(|x| x.0).collect(),
                     tmp_amounts.iter().map(|x| x.1).collect(),
-                    // U256::zero(),
-                    // None,
-                    // block_number,
                 ))
             }
             amount_in += step_size;
@@ -140,10 +206,9 @@ impl<M, Tx> Arbs<M, Tx>
     }
 }
 
-impl<M, T> LoadQuoterV3<M> for Arbs<M, T>
-    where
-        M: Middleware,
-        T: ArbTx + Ord,
+impl<M, T, U> LoadQuoterV3<M> for Arbs<M, T, U>
+where
+    M: Middleware,
 {
     fn load_uniswap_v3_quoter(&mut self) {
         let bytes = alloy_primitives::Bytes::from_str(QUOTER_BYTECODE).unwrap();
@@ -176,16 +241,17 @@ mod arbs_tests {
     use std::sync::Arc;
 
     use ethers::prelude::{Http, Provider};
-    use ethers::types::{U256, U64};
+    use ethers::types::{Address, U256, U64};
     use ethers::utils::Anvil;
     use revm::db::{CacheDB, EthersDB};
 
     use crate::arbitrage::arb_tx_v1::ArbTxV1;
     use crate::arbitrage::arbs::{ArbPool, Arbs};
+    use crate::arbitrage::executor::Executor;
     use crate::arbitrage::ArbTx;
     use crate::pool_data::uniswap_v2::UniswapV2;
-    use crate::pool_data::uniswap_v3::UniswapV3;
     use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
+    use crate::pool_data::uniswap_v3::UniswapV3;
     use crate::pools_graph::PoolsGraph;
 
     #[tokio::test(flavor = "multi_thread")]
@@ -251,8 +317,17 @@ mod arbs_tests {
             },
         ];
 
-        let mut arbs: Arbs<Provider<Http>, ArbTxV1> =
-            Arbs::new(vec![arb_path.clone()], cache_db);
+        let default_executor = Executor {
+            client: provider,
+            executor_address: Address::random(),
+            senders: Vec::new(),
+            output_token: Address::random(),
+            chain_id: U64::zero(),
+            tip_percentage: Default::default(),
+            coinbase_threshold: U256::one(),
+        };
+        let mut arbs: Arbs<Provider<Http>, ArbTxV1, Executor<Provider<Http>>> =
+            Arbs::new(vec![arb_path.clone()], cache_db, default_executor);
 
         arbs.load_uniswap_v3_quoter();
 
@@ -262,9 +337,9 @@ mod arbs_tests {
             U256::from(100),
             block_number,
         );
-        assert_eq!(arbs.executor_txs.len(), 1);
+        assert_eq!(arbs.txs.len(), 1);
         assert_eq!(
-            arbs.executor_txs.peek().unwrap().0.estimated_profit(),
+            arbs.txs.peek().unwrap().0.estimated_profit(),
             U256::from_dec_str("1116824102838017552066455359").unwrap()
         );
         assert_eq!(arbs.last_valid_tx.get(&arb_path).unwrap(), &block_number);

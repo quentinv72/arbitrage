@@ -2829,6 +2829,7 @@ dependencies = [
  "reqwest-graphql",
  "revm",
  "serde",
+ "thiserror",
  "tokio",
  "utils",
 ]

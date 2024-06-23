@@ -1,18 +1,10 @@
 use std::cmp::Ordering;
-use std::ops::{Div, Mul};
-use std::sync::Arc;
 
-use ethers::abi::{encode, Token};
 use ethers::abi::AbiEncode;
-use ethers::prelude::*;
-use ethers::providers::Middleware;
-use ethers::types::{Address, Bytes, U256, U64};
-use ethers::types::transaction::eip2718::TypedTransaction;
-use ethers_flashbots::*;
-use log::{error, info};
+use ethers::abi::{encode, Token};
+use ethers::types::{Address, Bytes, U256};
 
 use contracts::qv_executor::ExecuteBundleCall;
-use utils::utils::FlashbotsProvider;
 
 use crate::arbitrage::arbs::ArbPool;
 use crate::arbitrage::ArbTx;
@@ -61,7 +53,7 @@ impl ArbTx for ArbTxV1 {
         }
     }
 
-    fn build_tx(
+    fn get_bytes(
         &self,
         pools_graph: &PoolsGraph,
         executor_address: Address,
@@ -103,145 +95,28 @@ impl ArbTx for ArbTxV1 {
             output_token,
             data: next_call,
         }
-            .encode()
-            .into()
+        .encode()
+        .into()
     }
 
     fn estimated_profit(&self) -> U256 {
         self.estimated_profit
     }
+
+    fn set_amount_to_coinbase(&mut self, amount: U256) {
+        self.amount_to_coinbase = amount
+    }
+
+    fn get_amount_to_coinbase(&self) -> U256 {
+        self.amount_to_coinbase
+    }
+
+    fn path(&self) -> &[ArbPool] {
+        &self.targets
+    }
 }
 
 impl ArbTxV1 {
-    #[allow(clippy::too_many_arguments)]
-    pub async fn submit_transaction_flashbots(
-        &self,
-        graph: &PoolsGraph,
-        output_token: Address,
-        bundle_executor_address: Address,
-        next_block_base_fee: U256,
-        // has_reverted: &mut HashSet<Vec<Address>>,
-        client: Arc<FlashbotsProvider>,
-        priority_fee_percentage: u32,
-        block_number: U64,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let cc = self.build_transaction(
-            graph,
-            output_token,
-            Arc::clone(&client),
-            bundle_executor_address,
-        );
-
-        let gas_estimate_opt = match cc.estimate_gas().await {
-            Ok(est) => Some(est),
-            Err(_) => {
-                // TODO figure out how to filter out bad tokens
-                None
-                // if e.is_revert() {
-                //     if !has_reverted.contains(self.get_pair_addresses()) {
-                //         warn!(
-                //             "Gas estimate reverted for pairs {:#?} \nThe calldata {:#?}",
-                //             self.get_pair_addresses(),
-                //             cc.tx.data()
-                //         );
-                //         has_reverted.insert(self.get_pair_addresses().to_vec());
-                //     }
-                // } else {
-                //     panic!("Got a strange error {e}")
-                // }
-                // None
-            }
-        };
-
-        if gas_estimate_opt.is_none() {
-            return Ok(());
-        }
-        let gas_estimate = gas_estimate_opt.unwrap();
-
-        if gas_estimate.mul(next_block_base_fee) < self.estimated_profit {
-            let client_clone = Arc::clone(&client);
-            let estimated_profit = self.estimated_profit;
-            tokio::spawn(async move {
-                match Self::try_submit_trade_flashbots(
-                    estimated_profit,
-                    cc.tx,
-                    gas_estimate,
-                    next_block_base_fee,
-                    client_clone,
-                    priority_fee_percentage,
-                    block_number,
-                )
-                    .await
-                {
-                    Ok(_) => (),
-                    Err(e) => {
-                        error!("Failed to submit trade... see error {e}");
-                    }
-                };
-            });
-        }
-        Ok(())
-    }
-
-    async fn try_submit_trade_flashbots(
-        estimated_profit: U256,
-        tx: TypedTransaction,
-        gas_estimate: U256,
-        base_fee: U256,
-        rpc_client: Arc<FlashbotsProvider>,
-        priority_fee_percentage: u32,
-        block_number: U64,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        info!(
-            "Found a trade with estimated profit of {}",
-            estimated_profit
-        );
-        let remaining_profit = estimated_profit - gas_estimate.mul(base_fee);
-        let max_priority_fee_per_gas = (remaining_profit.div(gas_estimate))
-            .mul(U256::from(priority_fee_percentage))
-            .div(U256::from(10_000));
-        let max_fee = base_fee + max_priority_fee_per_gas;
-        match tx {
-            TypedTransaction::Eip1559(inner) => {
-                let tx: TypedTransaction = inner
-                    .gas(gas_estimate)
-                    .max_priority_fee_per_gas(max_priority_fee_per_gas)
-                    .max_fee_per_gas(max_fee)
-                    .chain_id(1)
-                    .into();
-                let signature = rpc_client.signer().sign_transaction(&tx).await?;
-                let bundle = BundleRequest::new()
-                    .push_transaction(tx.rlp_signed(&signature))
-                    .set_block(block_number + 1)
-                    .set_simulation_block(block_number)
-                    .set_simulation_timestamp(0);
-
-                // Simulate it
-                // let simulated_bundle = rpc_client.inner().simulate_bundle(&bundle).await?;
-                // info!("Simulated bundle: {:#?}", simulated_bundle);
-                // Send it
-                let results = rpc_client.inner().send_bundle(&bundle).await?;
-                for result in results {
-                    match result {
-                        Ok(pending_bundle) => match pending_bundle.await {
-                            Ok(bundle_hash) => info!(
-                                "Bundle with hash {:?} was included in target block",
-                                bundle_hash
-                            ),
-                            Err(PendingBundleError::BundleNotIncluded) => {
-                                error!("Bundle was not included in target block.")
-                            }
-                            Err(e) => error!("An error occured: {}", e),
-                        },
-                        Err(e) => error!("An error occured: {}", e),
-                    }
-                }
-                Ok(())
-            }
-            _other => panic!("Uggh this should be EIP1559"),
-        }
-    }
-
     fn build_data(amount_in: U256, target_address: Address, swap_data: Bytes) -> Bytes {
         Bytes::from(encode(&[
             Token::Uint(amount_in),
@@ -277,7 +152,7 @@ mod tests {
             U64::zero(),
             None,
         )
-            .into();
+        .into();
         let pool_2 = UniswapV2::new(
             "0xe6CE0226859f99C095c5b405BF187dC3c55Ab4D8"
                 .parse()
@@ -289,7 +164,7 @@ mod tests {
             U64::zero(),
             None,
         )
-            .into();
+        .into();
         graph.insert(pool_1);
         graph.insert(pool_2);
         let input_arb_pool = ArbPool {
@@ -323,7 +198,7 @@ mod tests {
         let bundle_executor_address = "0x2f5A6dd5bCB5ba085e5f6e2DBF43a0BeA4b6fdfC"
             .parse()
             .unwrap();
-        let bytes = arbitrage.build_tx(
+        let bytes = arbitrage.get_bytes(
             &graph,
             bundle_executor_address,
             "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
