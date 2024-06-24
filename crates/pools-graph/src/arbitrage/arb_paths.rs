@@ -1,5 +1,5 @@
-use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::Entry;
 use std::rc::Rc;
 
 use ethers::types::Address;
@@ -17,6 +17,7 @@ pub struct ArbPaths {
 
 #[derive(Error, Debug)]
 pub enum ArbPathsErrors {
+    // Returned if a path contains a pool more than once.
     #[error("Duplicated pools in path")]
     DuplicatedPools,
 }
