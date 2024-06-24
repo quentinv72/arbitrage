@@ -60,7 +60,7 @@ pub static PANCAKE_SWAP_FACTORY: Lazy<FactoryV2> = Lazy::new(|| FactoryV2 {
 
 pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
     pools_graph: &PoolsGraph,
-    factory_addresses: Vec<&FactoryV2>,
+    factory_addresses: Vec<FactoryV2>,
     client: Arc<M>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
@@ -77,9 +77,8 @@ pub async fn load_uniswap_v2_pairs<M: Middleware + 'static>(
         for i in 0..number_of_pairs.as_u32() {
             let client_clone = Arc::clone(&client);
             let pair_address = factory_contract.all_pairs(U256::from(i)).call().await?;
-            let factory_clone = *factory;
             tasks.push(tokio::spawn(async move {
-                UniswapV2::new_from_client(pair_address, factory_clone, client_clone).await
+                UniswapV2::new_from_client(pair_address, factory, client_clone).await
             }));
         }
         for task in tasks {

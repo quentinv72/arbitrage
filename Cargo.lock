@@ -2034,6 +2034,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ethers",
+ "log",
  "once_cell",
  "pools-graph",
  "revm",

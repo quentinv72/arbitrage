@@ -1,6 +1,6 @@
 use std::future::Future;
 use std::ops::{Div, Mul};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use ethers::core::k256::ecdsa::SigningKey;
 use ethers::middleware::signer::SignerMiddlewareError;
@@ -13,7 +13,6 @@ use thiserror::Error;
 
 use utils::utils::FlashbotsProvider;
 
-use crate::arbitrage::executor::ExecutorError::LockError;
 use crate::arbitrage::ArbTx;
 use crate::pools_graph::PoolsGraph;
 
@@ -34,11 +33,6 @@ where
 
 #[derive(Error, Debug)]
 pub enum ExecutorError<M: Middleware> {
-    // Sender address is locked because it is being used
-    // to send a tx.
-    #[error("All addresses are locked")]
-    LockError,
-
     // Error occurred during gas estimation.
     #[error(transparent)]
     GasEstimationError(#[from] SignerMiddlewareError<M::Inner, Wallet<SigningKey>>),
@@ -76,7 +70,7 @@ pub struct Executor<M> {
     // List of addresses that are authorized to call the `self.executor_address`.
     // They are guarded by a mutex to avoid having to manage nonces. Each sender can only
     // send 1 tx per block.
-    pub senders: Vec<Mutex<Address>>,
+    pub sender: Address,
     // Token that is sent back to the contract owner at the end of the transaction.
     pub output_token: Address,
     // Chain ID.
@@ -87,23 +81,6 @@ pub struct Executor<M> {
     // priority fee field on the request. This is mostly for transactions
     // that are highly profitable.
     pub coinbase_threshold: U256,
-}
-
-impl<M: Middleware> Executor<M> {
-    #[allow(clippy::result_large_err)]
-    fn next_available_sender(&self) -> Result<Address, ExecutorError<M>> {
-        for sender in &self.senders {
-            match sender.try_lock() {
-                Ok(addr) => {
-                    return Ok(*addr);
-                }
-                Err(_) => {
-                    continue;
-                }
-            }
-        }
-        Err(LockError)
-    }
 }
 
 impl<TX> Handler<FlashbotsProvider, TX> for Executor<FlashbotsProvider>
@@ -118,11 +95,10 @@ where
         next_block_base_fee: U256,
     ) -> Result<(), ExecutorError<FlashbotsProvider>> {
         let tx_bytes = tx.get_bytes(pools_graph, self.executor_address, self.output_token);
-        let sender = self.next_available_sender()?;
         let mut eip_1559_tx = Eip1559TransactionRequest::new()
             .data(tx_bytes)
             .chain_id(self.chain_id)
-            .from(sender)
+            .from(self.sender)
             .to(self.executor_address);
         let gas_estimate = self
             .client

@@ -11,3 +11,4 @@ anyhow.workspace = true
 once_cell.workspace = true
 revm.workspace = true
 ethers.workspace = true
+log.workspace = true

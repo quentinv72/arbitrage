@@ -7,17 +7,17 @@ use std::sync::Arc;
 
 use ethers::providers::Middleware;
 use ethers::types::{Address, Block, U256};
-use log::error;
+use log::{error, info};
 use revm::precompile::B256;
-use revm::primitives::{alloy_primitives, ruint, AccountInfo, Bytecode, KECCAK_EMPTY};
+use revm::primitives::{AccountInfo, alloy_primitives, Bytecode, KECCAK_EMPTY, ruint};
 use tokio::task::JoinSet;
 
 use crate::arbitrage::arb_paths::ArbPaths;
-use crate::arbitrage::executor::{ExecutorError, Handler};
 use crate::arbitrage::ArbTx;
+use crate::arbitrage::executor::{ExecutorError, Handler};
 use crate::pool_data::pool_data::PoolDataTrait;
-use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
 use crate::pool_data::uniswap_v3::{QUOTER_BYTECODE, QUOTER_MOCK_ADDRESS};
+use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
 use crate::pool_data::utils::EthersCacheDB;
 use crate::pools_graph::PoolsGraph;
 
@@ -92,9 +92,7 @@ where
                 Err(ExecutorError::GasEstimationError(err)) => {
                     error!("{tx:#?} got a gas estimation error {err}")
                 }
-                Err(ExecutorError::NotEnoughProfitError | ExecutorError::LockError) => {
-                    self.txs.push(tx)
-                }
+                Err(ExecutorError::NotEnoughProfitError) => self.txs.push(tx),
                 Err(ExecutorError::PendingBundleError {
                     error,
                     base_fee,
@@ -140,12 +138,14 @@ where
                 continue;
             }
             seen.insert(*arb_path);
-            let arb_tx = self
-                .compute_arbitrage(arb_path, pools_graph, max_amount_in, num_steps)
-                .expect("Computed arb shouldn't fail");
-            if let Some(arb) = arb_tx {
-                // add arb tx to heap
-                self.txs.push(arb);
+            // info!("Computing arb for path {arb_path:#?}");
+            match self.compute_arbitrage(arb_path, pools_graph, max_amount_in, num_steps) {
+                Ok(Some(arb)) => {
+                    info!("Adding arb {arb:#?} to heap");
+                    self.txs.push(arb)
+                }
+                Ok(None) => (),
+                Err(err) => error!("An error occured for path {arb_path:#?} ---> {err}"),
             }
         }
     }
@@ -157,7 +157,8 @@ where
         max_amount_in: U256,
         num_steps: U256,
     ) -> anyhow::Result<Option<Tx>> {
-        let mut amount_in = U256::zero();
+        // Start at 1 because 0 seems to cause an error.
+        let mut amount_in = U256::one();
         let mut profitable_arbs = None;
         let mut curr_max_profit = U256::zero();
         let step_size = max_amount_in.div(num_steps);
@@ -236,11 +237,11 @@ mod arbs_tests {
     use crate::arbitrage::arb_paths::ArbPaths;
     use crate::arbitrage::arb_tx_v1::ArbTxV1;
     use crate::arbitrage::arbs::{ArbPool, Arbs};
-    use crate::arbitrage::executor::Executor;
     use crate::arbitrage::ArbTx;
+    use crate::arbitrage::executor::Executor;
     use crate::pool_data::uniswap_v2::UniswapV2;
-    use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
     use crate::pool_data::uniswap_v3::UniswapV3;
+    use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
     use crate::pools_graph::PoolsGraph;
 
     #[tokio::test(flavor = "multi_thread")]
@@ -309,7 +310,7 @@ mod arbs_tests {
         let default_executor = Executor {
             client: provider,
             executor_address: Address::random(),
-            senders: Vec::new(),
+            sender: Address::random(),
             output_token: Address::random(),
             chain_id: U64::zero(),
             tip_percentage: Default::default(),

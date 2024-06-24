@@ -55,7 +55,7 @@ fn setup_arb() -> (
     let default_executor = Executor {
         client: provider,
         executor_address: Address::random(),
-        senders: Vec::new(),
+        sender: Vec::new(),
         output_token: Address::random(),
         chain_id: U64::zero(),
         tip_percentage: Default::default(),
