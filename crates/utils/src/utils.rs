@@ -13,7 +13,7 @@ use url::Url;
 use crate::utils::Env::{Production, Staging};
 
 pub type FlashbotsProvider =
-    SignerMiddleware<BroadcasterMiddleware<Provider<Http>, Wallet<SigningKey>>, Wallet<SigningKey>>;
+SignerMiddleware<BroadcasterMiddleware<Provider<Http>, Wallet<SigningKey>>, Wallet<SigningKey>>;
 
 static BUILDER_URLS: &[&str] = &[
     "https://rpc.beaverbuild.org",
@@ -23,9 +23,9 @@ static BUILDER_URLS: &[&str] = &[
 ];
 
 pub struct Utils<M: Middleware> {
-    ws_client: Arc<Provider<Ws>>,
-    rpc_client: Arc<M>,
-    bundle_executor: Address,
+    pub ws_client: Arc<Provider<Ws>>,
+    pub rpc_client: Arc<M>,
+    pub bundle_executor: Address,
     env: Env,
 }
 
@@ -35,7 +35,7 @@ pub trait Setup<M: Middleware> {
 }
 
 impl Setup<FlashbotsProvider> for Utils<FlashbotsProvider> {
-    async fn setup() -> Self {
+    async fn setup() -> Utils<FlashbotsProvider> {
         let vars = Vars::init();
         let tx_signing_wallet: LocalWallet = vars.tx_signing_private_key.unwrap().parse().unwrap();
         let tx_signing_wallet = tx_signing_wallet.with_chain_id(1_u32);
@@ -66,18 +66,6 @@ impl Setup<FlashbotsProvider> for Utils<FlashbotsProvider> {
 }
 
 impl<M: Middleware> Utils<M> {
-    pub fn get_rpc_client(&self) -> Arc<M> {
-        Arc::clone(&self.rpc_client)
-    }
-
-    pub fn get_ws_client(&self) -> Arc<Provider<Ws>> {
-        Arc::clone(&self.ws_client)
-    }
-
-    pub fn get_bundle_executor_address(&self) -> Address {
-        self.bundle_executor
-    }
-
     pub fn is_production(&self) -> bool {
         match self.env {
             Production => true,

@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "bins/inspectah_giving",
     "crates/contracts",
     "crates/pools-graph",
     "crates/utils"
