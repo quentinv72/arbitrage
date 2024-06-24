@@ -1,5 +1,5 @@
-use std::collections::{HashMap, HashSet};
 use std::collections::hash_map::Entry;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use ethers::types::Address;
@@ -12,7 +12,7 @@ use crate::arbitrage::arbs::ArbPool;
 pub struct ArbPaths {
     // Maps a pool identifier to a list of arbitrage paths. The paths are wrapped in an Rc<_> so
     // that we don't need to clone each Vec multiple times.
-    pool_to_paths: HashMap<Address, Vec<Rc<Vec<ArbPool>>>>,
+    pools_to_paths: HashMap<Address, Vec<Rc<Vec<ArbPool>>>>,
 }
 
 #[derive(Error, Debug)]
@@ -25,7 +25,7 @@ pub enum ArbPathsErrors {
 impl ArbPaths {
     #[inline]
     pub fn get_paths(&self, addr: &Address) -> Option<&Vec<Rc<Vec<ArbPool>>>> {
-        self.pool_to_paths.get(addr)
+        self.pools_to_paths.get(addr)
     }
 
     #[inline]
@@ -41,7 +41,7 @@ impl ArbPaths {
         let rc_path = Rc::new(path);
         for arb_pool in rc_path.iter() {
             let key = arb_pool.pool;
-            match self.pool_to_paths.entry(key) {
+            match self.pools_to_paths.entry(key) {
                 Entry::Occupied(mut e) => {
                     let paths = e.get_mut();
                     paths.push(rc_path.clone())
@@ -52,6 +52,12 @@ impl ArbPaths {
             }
         }
         Ok(())
+    }
+
+    // Slow operation. Use sparingly.
+    #[inline]
+    pub fn get_all_pools(&self) -> Vec<&Address> {
+        self.pools_to_paths.keys().collect()
     }
 }
 

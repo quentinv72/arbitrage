@@ -6,6 +6,7 @@ use ethers::prelude::{Http, Provider, U256, U64};
 use ethers::utils::WEI_IN_ETHER;
 use revm::db::{CacheDB, EthersDB};
 
+use pools_graph::arbitrage::arb_paths::ArbPaths;
 use pools_graph::arbitrage::arb_tx_v1::ArbTxV1;
 use pools_graph::arbitrage::arbs::{ArbPool, Arbs};
 use pools_graph::arbitrage::executor::Executor;
@@ -25,7 +26,14 @@ fn bench_compute_all_arbitrage_2_v3_pools(c: &mut Criterion) {
                     setup_arb,
                     |(mut arb, graph)| {
                         arb.load_uniswap_v3_quoter();
-                        arb.compute_all_arbitrages(&graph, WEI_IN_ETHER, num_steps, U64::zero());
+                        arb.compute_all_arbitrages(
+                            &["0xb457fcd59cbe5cb116d1f649fa0f921b42557aef"
+                                .parse()
+                                .unwrap()],
+                            &graph,
+                            WEI_IN_ETHER,
+                            num_steps,
+                        );
                     },
                     BatchSize::SmallInput,
                 )
@@ -83,7 +91,10 @@ fn setup_arb() -> (
         },
     ];
 
-    let arbs = Arbs::new(vec![arb_path_1], cache_db, default_executor);
+    let mut arb_paths = ArbPaths::default();
+    arb_paths.insert_path(arb_path_1).unwrap();
+
+    let arbs = Arbs::new(arb_paths, cache_db, default_executor);
     (arbs, pools_graph)
 }
 

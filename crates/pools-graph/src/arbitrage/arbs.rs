@@ -1,17 +1,18 @@
 use std::cell::RefCell;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BinaryHeap, HashSet};
 use std::fmt::Debug;
 use std::ops::Div;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use ethers::providers::Middleware;
-use ethers::types::{Address, Block, U256, U64};
+use ethers::types::{Address, Block, U256};
 use log::error;
 use revm::precompile::B256;
 use revm::primitives::{alloy_primitives, ruint, AccountInfo, Bytecode, KECCAK_EMPTY};
 use tokio::task::JoinSet;
 
+use crate::arbitrage::arb_paths::ArbPaths;
 use crate::arbitrage::executor::{ExecutorError, Handler};
 use crate::arbitrage::ArbTx;
 use crate::pool_data::pool_data::PoolDataTrait;
@@ -21,18 +22,9 @@ use crate::pool_data::utils::EthersCacheDB;
 use crate::pools_graph::PoolsGraph;
 
 pub struct Arbs<M: Middleware, Tx, Executor> {
-    // All arbitrage path. This should only contain paths that may
-    // have arbitrage in a given block, except for the first block where object is built.
-    // would be useful to have a zero for one concept on the paths...
-    paths: Vec<Vec<ArbPool>>,
+    paths: ArbPaths,
     // Heap of valid arbitrage transactions
-    // they may have been computed in a previous block,but should always be valid.
-    // (Tx, block_number)
-    // Tuples are compared lexicographically.
-    // https://stackoverflow.com/questions/61322773/how-is-ordering-defined-for-tuples-in-rust
-    txs: BinaryHeap<(Tx, U64)>,
-    // Used to invalidate old transactions in txs
-    last_valid_tx: HashMap<Vec<ArbPool>, U64>,
+    txs: BinaryHeap<Tx>,
     // Cache db used by REVM to compute swaps for UniswapV3, etc.
     cache_db: RefCell<EthersCacheDB<M>>,
     // Executor used to manage transaction submission to the network.
@@ -46,14 +38,13 @@ where
     Executor: Handler<M, Tx> + Send + Sync + 'static,
 {
     pub fn new(
-        paths: Vec<Vec<ArbPool>>,
+        paths: ArbPaths,
         cache_db: EthersCacheDB<M>,
         executor: Executor,
     ) -> Arbs<M, Tx, Executor> {
         Self {
             paths,
             txs: BinaryHeap::new(),
-            last_valid_tx: HashMap::new(),
             cache_db: RefCell::new(cache_db),
             executor: Arc::new(executor),
         }
@@ -84,15 +75,7 @@ where
         let mut results = JoinSet::new();
         let next_block_base_fee = block.next_block_base_fee().unwrap();
         let block_number = block.number.unwrap();
-        while let Some((mut tx, creation_block_number)) = self.txs.pop() {
-            let last_valid_tx_block_number = self
-                .last_valid_tx
-                .get(tx.path())
-                .expect("Every path should have a last valid block number.");
-            // Skip arbitrage if it is old and no longer valid
-            if creation_block_number < *last_valid_tx_block_number {
-                continue;
-            }
+        while let Some(mut tx) = self.txs.pop() {
             let executor = Arc::clone(&self.executor);
             let graph_clone = Arc::clone(&pools_graph);
             results.spawn(async move {
@@ -110,7 +93,7 @@ where
                     error!("{tx:#?} got a gas estimation error {err}")
                 }
                 Err(ExecutorError::NotEnoughProfitError | ExecutorError::LockError) => {
-                    self.txs.push((tx, block_number))
+                    self.txs.push(tx)
                 }
                 Err(ExecutorError::PendingBundleError {
                     error,
@@ -134,37 +117,42 @@ where
 
     pub fn compute_all_arbitrages(
         &mut self,
+        targeted_pools: &[Address],
         pools_graph: &PoolsGraph,
         max_amount_in: U256,
         num_steps: U256,
-        block_number: U64,
     ) {
+        let mut paths = Vec::new();
+        for targeted_pool in targeted_pools {
+            if let Some(p) = self.paths.get_paths(targeted_pool) {
+                for path in p {
+                    paths.push(path.as_ref());
+                }
+            }
+        }
+
+        let mut seen = HashSet::new();
         // this can probably be parallelized by making clones of cache db for each arb path..
         // This might be quicker but not sure.
         // Needs to be benchmarked.
-        for arb_path in &self.paths {
+        for arb_path in &paths {
+            if seen.contains(arb_path) {
+                continue;
+            }
+            seen.insert(*arb_path);
             let arb_tx = self
                 .compute_arbitrage(arb_path, pools_graph, max_amount_in, num_steps)
                 .expect("Computed arb shouldn't fail");
-            match arb_tx {
-                Some(arb) => {
-                    // add arb tx to heap
-                    self.txs.push((arb, block_number));
-                    // invalidate other arb tx on that path from previous blocks that
-                    // may still be on the heap.
-                    self.last_valid_tx.insert(arb_path.to_vec(), block_number);
-                }
-                None => {
-                    // invalidate arb tx that may still be on the heap from previous blocks.
-                    self.last_valid_tx.insert(arb_path.to_vec(), block_number);
-                }
+            if let Some(arb) = arb_tx {
+                // add arb tx to heap
+                self.txs.push(arb);
             }
         }
     }
 
     fn compute_arbitrage(
         &self,
-        arb_path: &Vec<ArbPool>,
+        arb_path: &[ArbPool],
         pools_graph: &PoolsGraph,
         max_amount_in: U256,
         num_steps: U256,
@@ -245,6 +233,7 @@ mod arbs_tests {
     use ethers::utils::Anvil;
     use revm::db::{CacheDB, EthersDB};
 
+    use crate::arbitrage::arb_paths::ArbPaths;
     use crate::arbitrage::arb_tx_v1::ArbTxV1;
     use crate::arbitrage::arbs::{ArbPool, Arbs};
     use crate::arbitrage::executor::Executor;
@@ -326,22 +315,26 @@ mod arbs_tests {
             tip_percentage: Default::default(),
             coinbase_threshold: U256::one(),
         };
+
+        let mut arb_paths = ArbPaths::default();
+        arb_paths
+            .insert_path(arb_path.clone())
+            .expect("Should insert fine");
         let mut arbs: Arbs<Provider<Http>, ArbTxV1, Executor<Provider<Http>>> =
-            Arbs::new(vec![arb_path.clone()], cache_db, default_executor);
+            Arbs::new(arb_paths, cache_db, default_executor);
 
         arbs.load_uniswap_v3_quoter();
 
         arbs.compute_all_arbitrages(
+            &[uniswap_v3_pool.pool_address, uniswap_v2_pair.pair_address],
             &pools_graph,
             U256::from_dec_str("505000000000000000000000").unwrap(),
             U256::from(100),
-            block_number,
         );
         assert_eq!(arbs.txs.len(), 1);
         assert_eq!(
-            arbs.txs.peek().unwrap().0.estimated_profit(),
+            arbs.txs.peek().unwrap().estimated_profit(),
             U256::from_dec_str("1116824102838017552066455359").unwrap()
         );
-        assert_eq!(arbs.last_valid_tx.get(&arb_path).unwrap(), &block_number);
     }
 }
