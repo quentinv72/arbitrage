@@ -4,6 +4,7 @@ use ethers::prelude::{Bytes, U256};
 use crate::arbitrage::arbs::ArbPool;
 use crate::pools_graph::PoolsGraph;
 
+pub mod arb_paths;
 pub mod arb_tx_v1;
 pub mod arbs;
 pub mod executor;
