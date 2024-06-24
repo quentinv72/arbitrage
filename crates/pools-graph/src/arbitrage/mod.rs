@@ -4,10 +4,10 @@ use ethers::prelude::{Bytes, U256};
 use crate::arbitrage::arbs::ArbPool;
 use crate::pools_graph::PoolsGraph;
 
+pub mod arb_paths;
 pub mod arb_tx_v1;
 pub mod arbs;
 pub mod executor;
-pub mod arb_paths;
 
 pub trait ArbTx {
     fn new(targets: Vec<ArbPool>, amounts_in: Vec<U256>, amounts_out: Vec<U256>) -> Self;
