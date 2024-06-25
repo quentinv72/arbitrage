@@ -8,10 +8,10 @@ use ethers::middleware::Middleware;
 use ethers::prelude::{H256, U64};
 use ethers::types::{Address, Bytes, I256, U256};
 use revm::Evm;
+use revm::GetInspector;
 use revm::primitives::{
-    AccountInfo, address, alloy_primitives, Bytecode, ExecutionResult, Output, ruint, TransactTo,
+    AccountInfo, address, alloy_primitives, Bytecode, ExecutionResult, ruint, TransactTo,
 };
-use contracts::i_quoter_v_2::IQuoterV2;
 
 use contracts::i_uniswap_v_3_factory::PoolCreatedFilter;
 use contracts::i_uniswap_v_3_pool::{IUniswapV3Pool, SwapCall};
@@ -139,7 +139,6 @@ impl PoolDataTrait for UniswapV3 {
         _token_out: Address,
         cache_db: Option<&mut EthersCacheDB<M>>,
     ) -> anyhow::Result<U256> {
-        let quoter = IQuoterV2::new(self.factory.quoter_address, cache_db.unwrap().db)
         let zero_for_one = token_in == self.token_0;
         let cache_db = cache_db.expect("Missing cache db");
         let encoded = GetAmountOutCall {
@@ -161,20 +160,19 @@ impl PoolDataTrait for UniswapV3 {
             .build();
         let ref_tx = evm.transact().unwrap();
         let result = ref_tx.result;
-        let (amount_0_delta, amount_1_delta) = match result {
-            ExecutionResult::Success {
-                output: Output::Call(value),
+        let amount_out = match result {
+            ExecutionResult::Revert {
+                output,
                 ..
-            } => <(I256, I256)>::decode(value)?,
+            } => <U256>::decode(output)?,
             result => {
                 return Err(anyhow!(
                     "UniswapV3::get_amount_out execution failed: {result:#?}"
                 ));
             }
         };
-        // The amount out will be negative and amount in is positive
-        let min = -amount_0_delta.min(amount_1_delta);
-        Ok(min.into_raw())
+
+        Ok(amount_out)
     }
 
     #[inline]
@@ -339,39 +337,77 @@ mod tests {
     }
 
 
-    // #[tokio::test]
-    // async fn get_amount_out_test() {
-    //     let token_0 = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
-    //         .parse()
-    //         .unwrap();
-    //     let token_1 = "0x3506424f91fd33084466f402d5d97f05f8e3b4af"
-    //         .parse()
-    //         .unwrap();
-    //
-    //     let provider = Arc::new(Provider::<Http>::try_from("http://10.88.111.23:8545").unwrap());
-    //
-    //     let ethers_db = EthersDB::new(provider, None).unwrap();
-    //
-    //     let mut cache_db = CacheDB::new(ethers_db);
-    //
-    //     UniswapV3::load_quoter_bytecode(&mut cache_db);
-    //
-    //     let pool = UniswapV3 {
-    //         pool_address: "0x325365ed8275f6a74cac98917b7f6face8da533b"
-    //             .parse()
-    //             .unwrap(),
-    //         sqrt_price_x_96: U256::zero(),
-    //         token_0,
-    //         token_1,
-    //         fee_tier: 3,
-    //         block_last_updates: U64::zero(),
-    //         factory: Default::default(),
-    //     };
-    //
-    //     let amount_out = pool
-    //         .get_amount_out(U256::from(10000000), token_0, token_1, Some(&mut cache_db))
-    //         .unwrap();
-    //     println!("amount out {amount_out}");
-    //     assert!(false);
-    // }
+    #[tokio::test(flavor = "multi_thread")]
+    async fn get_amount_out_test() {
+        // Use revm-inspectors for tracing!
+        // https://github.com/paradigmxyz/revm-inspectors/blob/main/tests/it/geth.rs
+        // call frames example is useful
+
+        let token_0 = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+            .parse()
+            .unwrap();
+
+        let token_1 = "0xdac17f958d2ee523a2206206994597c13d831ec7"
+            .parse()
+            .unwrap();
+        let provider = Arc::new(Provider::<Http>::try_from("http://10.88.111.23:8545").unwrap());
+
+        let ethers_db = EthersDB::new(provider.clone(), None).unwrap();
+
+        let mut cache_db = CacheDB::new(ethers_db);
+
+        UniswapV3::load_quoter_bytecode(&mut cache_db);
+
+        let pool = UniswapV3 {
+            pool_address: "0x72c2178e082fedb13246877b5aa42ebce1b72218"
+                .parse()
+                .unwrap(),
+            sqrt_price_x_96: U256::zero(),
+            token_0,
+            token_1,
+            fee_tier: 3,
+            block_last_updates: U64::zero(),
+            factory: Default::default(),
+        };
+
+        let amount_in = U256::from_dec_str("33955770").unwrap();
+
+        let quoter_contract = IQuoterV2::new("0x64e8802FE490fa7cc61d3463958199161Bb608A7".parse::<Address>().unwrap(), provider);
+        let expected_amount_out = quoter_contract.quote_exact_input_single(QuoteExactInputSingleParams{
+            token_in: token_1,
+            token_out: token_0,
+            amount_in,
+            fee: 100,
+            sqrt_price_limit_x96: U256::from_dec_str("1461446703485210103287273052203988822378723970341").unwrap()
+        }).call().await.unwrap();
+        // println!("{expected_amount_out:#?}");
+        let amount_out = pool
+            .get_amount_out(amount_in, token_1, token_0, Some(&mut cache_db))
+            .unwrap();
+        println!("amount out {amount_out}");
+
+    //     targets: [
+        //         ArbPool {
+        //             pool: 0x74c99f3f5331676f6aec2756e1f39b4fc029a83e,
+        //             token_in: 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2,
+        //             token_out: 0xdac17f958d2ee523a2206206994597c13d831ec7,
+        //         },
+        //         ArbPool {
+        //             pool: 0x72c2178e082fedb13246877b5aa42ebce1b72218,
+        //             token_in: 0xdac17f958d2ee523a2206206994597c13d831ec7,
+        //             token_out: 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2,
+        //         },
+        //     ],
+        //     amounts_in: [
+        //         10000000000000001,
+        //         33955770,
+        //     ],
+        //     amounts_out: [
+        //         33955770,
+        //         510546835786697850,
+        //     ],
+        //     amount_to_coinbase: 0,
+        //     estimated_profit: 500546835786697849,
+        //                       510546835786697850
+    }
 }

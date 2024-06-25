@@ -40,7 +40,7 @@ static V2_FACTORIES: [&Lazy<FactoryV2>; 5] = [
 ];
 
 static V3_FACTORIES: [&Lazy<FactoryV3>; 2] =
-    [&SUSHI_SWAP_V3, &PANCAKE_SWAP_V3];
+    [&UNISWAP_V3_FACTORY, &PANCAKE_SWAP_V3];
 
 const APP_NAME: &str = env!("CARGO_CRATE_NAME");
 
@@ -102,7 +102,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let updated_pools = pools_graph
             .maybe_update_graph(Block::<TxHash>::from(block.clone()), Arc::clone(&utils.rpc_client))
             .await?;
-        println!("{updated_pools:#?}");
         // if first_block {
         //     arbs.compute_all_arbitrages(&all_paths, &pools_graph, MAX_AMOUNT_IN, U256::from(50));
         //     first_block = false;
@@ -111,7 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &updated_pools,
                 &pools_graph,
                 MAX_AMOUNT_IN,
-                U256::from(100),
+                U256::from(50),
             );
         // }
         // TODO figure out whether nonce management is actually an issue
