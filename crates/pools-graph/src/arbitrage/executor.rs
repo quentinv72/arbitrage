@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::future::Future;
 use std::ops::{Div, Mul};
 use std::sync::Arc;
@@ -8,7 +9,7 @@ use ethers::prelude::*;
 use ethers::types::transaction::eip2718::TypedTransaction;
 use ethers::types::{Address, U256, U64};
 use ethers_flashbots::{BundleRequest, PendingBundleError};
-use log::info;
+use log::{debug, info};
 use thiserror::Error;
 
 use utils::utils::FlashbotsProvider;
@@ -85,7 +86,7 @@ pub struct Executor<M> {
 
 impl<TX> Handler<FlashbotsProvider, TX> for Executor<FlashbotsProvider>
 where
-    TX: ArbTx + Send + Sync,
+    TX: ArbTx + Send + Sync + Debug,
 {
     async fn execute(
         &self,
@@ -100,6 +101,8 @@ where
             .chain_id(self.chain_id)
             .from(self.sender)
             .to(self.executor_address);
+        debug!("{tx:#?}");
+        debug!("{eip_1559_tx:?}");
         let gas_estimate = self
             .client
             .estimate_gas(&(eip_1559_tx.clone().into()), None)
@@ -109,7 +112,7 @@ where
         }
 
         eip_1559_tx = eip_1559_tx.gas(gas_estimate);
-        let profit = gas_estimate.mul(next_block_base_fee) - tx.estimated_profit();
+        let profit = tx.estimated_profit() - gas_estimate.mul(next_block_base_fee);
         let tip = profit
             .mul(U256::from(self.tip_percentage))
             .div(U256::from(10_000));

@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use dashmap::{DashMap, DashSet};
 use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::try_result::TryResult;
+use dashmap::{DashMap, DashSet};
 use ethers::contract::ContractError;
 use ethers::prelude::TxHash;
 use ethers::providers::Middleware;

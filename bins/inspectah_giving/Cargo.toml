@@ -12,3 +12,5 @@ once_cell.workspace = true
 revm.workspace = true
 ethers.workspace = true
 log.workspace = true
+rayon.workspace = true
+itertools = "0.13.0"

@@ -8,7 +8,7 @@ use thiserror::Error;
 use crate::arbitrage::arb_paths::ArbPathsErrors::DuplicatedPools;
 use crate::arbitrage::arbs::ArbPool;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ArbPaths {
     // Maps a pool identifier to a list of arbitrage paths. The paths are wrapped in an Rc<_> so
     // that we don't need to clone each Vec multiple times.

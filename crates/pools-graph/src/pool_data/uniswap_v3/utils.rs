@@ -12,28 +12,34 @@ use crate::pool_data::pool_data::PoolData;
 use crate::pool_data::uniswap_v3::UniswapV3;
 use crate::pools_graph::PoolsGraph;
 
-pub static UNISWAP_V3_FACTORY: Lazy<FactoryV3> = Lazy::new(|| FactoryV3 {
+pub static UNISWAP_V3_FACTORY: Lazy<FactoryV3> = Lazy::new(|| {
+    FactoryV3 {
     address: "0x1F98431c8aD98523631AE4a59f267346ea31F984"
         .parse()
         .unwrap(),
-    subgraph_url: "https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3",
+    subgraph_url: "https://gateway-arbitrum.network.thegraph.com/api/130059492893eb84c05bc86c467f148d/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
     quoter_address:"0x61fFE014bA17989E743c5F6cB21bF9697530B21e".parse().unwrap(),
+}
 });
 
-pub static PANCAKE_SWAP_V3: Lazy<FactoryV3> = Lazy::new(|| FactoryV3 {
+pub static PANCAKE_SWAP_V3: Lazy<FactoryV3> = Lazy::new(|| {
+    FactoryV3 {
     address: "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"
         .parse()
         .unwrap(),
-    subgraph_url: "https://api.thegraph.com/subgraphs/name/pancakeswap/exchange-v3-eth",
+    subgraph_url: "https://gateway-arbitrum.network.thegraph.com/api/130059492893eb84c05bc86c467f148d/subgraphs/id/CJYGNhb7RvnhfBDjqpRnD3oxgyhibzc7fkAMa38YV3oS",
     quoter_address: "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997".parse().unwrap(),
+}
 });
 
-pub static SUSHI_SWAP_V3: Lazy<FactoryV3> = Lazy::new(|| FactoryV3 {
+pub static SUSHI_SWAP_V3: Lazy<FactoryV3> = Lazy::new(|| {
+    FactoryV3 {
     address: "0xbACEB8eC6b9355Dfc0269C18bac9d6E2Bdc29C4F"
         .parse()
         .unwrap(),
-    subgraph_url: "https://api.thegraph.com/subgraphs/name/sushi-v3/v3-ethereum",
+    subgraph_url: "https://gateway-arbitrum.network.thegraph.com/api/130059492893eb84c05bc86c467f148d/subgraphs/id/7okunX6MGm2pdFK7WJSwm9o82okpBLEzfGrqHDDMWYvq",
     quoter_address: "0x64e8802FE490fa7cc61d3463958199161Bb608A7".parse().unwrap(),
+}
 });
 
 pub async fn load_uniswap_v3_pools<M: Middleware + 'static>(

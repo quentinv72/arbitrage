@@ -7,11 +7,11 @@ use ethers::contract::{ContractError, EthEvent};
 use ethers::middleware::Middleware;
 use ethers::prelude::{H256, U64};
 use ethers::types::{Address, Bytes, I256, U256};
+use revm::primitives::{
+    address, alloy_primitives, ruint, AccountInfo, Bytecode, ExecutionResult, TransactTo,
+};
 use revm::Evm;
 use revm::GetInspector;
-use revm::primitives::{
-    AccountInfo, address, alloy_primitives, Bytecode, ExecutionResult, ruint, TransactTo,
-};
 
 use contracts::i_uniswap_v_3_factory::PoolCreatedFilter;
 use contracts::i_uniswap_v_3_pool::{IUniswapV3Pool, SwapCall};
@@ -161,10 +161,13 @@ impl PoolDataTrait for UniswapV3 {
         let ref_tx = evm.transact().unwrap();
         let result = ref_tx.result;
         let amount_out = match result {
-            ExecutionResult::Revert {
-                output,
-                ..
-            } => <U256>::decode(output)?,
+            ExecutionResult::Revert { output, .. } => {
+                if output.0.len() == 32 {
+                    <U256>::decode(output)?
+                } else {
+                    U256::zero()
+                }
+            }
             result => {
                 return Err(anyhow!(
                     "UniswapV3::get_amount_out execution failed: {result:#?}"
@@ -275,11 +278,14 @@ mod tests {
             .fork("https://eth-sepolia.g.alchemy.com/v2/fEmCuDGqB-tSA4R5HnnVCy1n9Jg4GqJg@6077409")
             .spawn();
 
-
         let provider = Arc::new(Provider::<Http>::try_from(anvil.endpoint()).unwrap());
 
-        let quoter_contract = IQuoterV2::new("0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3".parse::<Address>().unwrap(), provider.clone());
-
+        let quoter_contract = IQuoterV2::new(
+            "0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3"
+                .parse::<Address>()
+                .unwrap(),
+            provider.clone(),
+        );
 
         let pool = UniswapV3 {
             pool_address: "0x9799b5EDC1aA7D3FAd350309B08df3F64914E244"
@@ -301,41 +307,55 @@ mod tests {
         let amount_out = pool
             .get_amount_out(U256::from(1000), token_0, token_1, Some(&mut cache_db))
             .unwrap();
-        let expected_amount_out = quoter_contract.quote_exact_input_single(QuoteExactInputSingleParams {
-            token_in: token_0,
-            token_out: token_1,
-            amount_in: U256::from(1000),
-            fee:3000,
-            sqrt_price_limit_x96: U256::from_dec_str("4295128749").unwrap(),
-        }).call().await.unwrap();
+        let expected_amount_out = quoter_contract
+            .quote_exact_input_single(QuoteExactInputSingleParams {
+                token_in: token_0,
+                token_out: token_1,
+                amount_in: U256::from(1000),
+                fee: 3000,
+                sqrt_price_limit_x96: U256::from_dec_str("4295128749").unwrap(),
+            })
+            .call()
+            .await
+            .unwrap();
         assert_eq!(amount_out, expected_amount_out.0);
 
         let amount_out = pool
             .get_amount_out(U256::from(10), token_0, token_1, Some(&mut cache_db))
             .unwrap();
-        let expected_amount_out = quoter_contract.quote_exact_input_single(QuoteExactInputSingleParams {
-            token_in: token_0,
-            token_out: token_1,
-            amount_in: U256::from(10),
-            fee:3000,
-            sqrt_price_limit_x96: U256::from_dec_str("4295128749").unwrap(),
-        }).call().await.unwrap();
+        let expected_amount_out = quoter_contract
+            .quote_exact_input_single(QuoteExactInputSingleParams {
+                token_in: token_0,
+                token_out: token_1,
+                amount_in: U256::from(10),
+                fee: 3000,
+                sqrt_price_limit_x96: U256::from_dec_str("4295128749").unwrap(),
+            })
+            .call()
+            .await
+            .unwrap();
         assert_eq!(amount_out, expected_amount_out.0);
 
         let amount_out = pool
             .get_amount_out(U256::from(100000000), token_1, token_0, Some(&mut cache_db))
             .unwrap();
-        let expected_amount_out = quoter_contract.quote_exact_input_single(QuoteExactInputSingleParams {
-            token_in: token_1,
-            token_out: token_0,
-            amount_in: U256::from(100000000),
-            fee:3000,
-            sqrt_price_limit_x96: U256::from_dec_str("1461446703485210103287273052203988822378723970341").unwrap(),
-        }).call().await.unwrap();
+        let expected_amount_out = quoter_contract
+            .quote_exact_input_single(QuoteExactInputSingleParams {
+                token_in: token_1,
+                token_out: token_0,
+                amount_in: U256::from(100000000),
+                fee: 3000,
+                sqrt_price_limit_x96: U256::from_dec_str(
+                    "1461446703485210103287273052203988822378723970341",
+                )
+                .unwrap(),
+            })
+            .call()
+            .await
+            .unwrap();
         assert_eq!(amount_out, expected_amount_out.0);
         drop(anvil);
     }
-
 
     #[tokio::test(flavor = "multi_thread")]
     async fn get_amount_out_test() {
@@ -343,11 +363,11 @@ mod tests {
         // https://github.com/paradigmxyz/revm-inspectors/blob/main/tests/it/geth.rs
         // call frames example is useful
 
-        let token_0 = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        let token_0 = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
             .parse()
             .unwrap();
 
-        let token_1 = "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        let token_1 = "0xD31a59c85aE9D8edEFeC411D448f90841571b89c"
             .parse()
             .unwrap();
         let provider = Arc::new(Provider::<Http>::try_from("http://10.88.111.23:8545").unwrap());
@@ -359,7 +379,7 @@ mod tests {
         UniswapV3::load_quoter_bytecode(&mut cache_db);
 
         let pool = UniswapV3 {
-            pool_address: "0x72c2178e082fedb13246877b5aa42ebce1b72218"
+            pool_address: "0x8d00d4E2577c2f41863Adc6aBd39adFF59ba5A42"
                 .parse()
                 .unwrap(),
             sqrt_price_x_96: U256::zero(),
@@ -370,44 +390,43 @@ mod tests {
             factory: Default::default(),
         };
 
-        let amount_in = U256::from_dec_str("33955770").unwrap();
+        let amount_in = U256::from_dec_str("1").unwrap();
 
-        let quoter_contract = IQuoterV2::new("0x64e8802FE490fa7cc61d3463958199161Bb608A7".parse::<Address>().unwrap(), provider);
-        let expected_amount_out = quoter_contract.quote_exact_input_single(QuoteExactInputSingleParams{
-            token_in: token_1,
-            token_out: token_0,
-            amount_in,
-            fee: 100,
-            sqrt_price_limit_x96: U256::from_dec_str("1461446703485210103287273052203988822378723970341").unwrap()
-        }).call().await.unwrap();
+        // let quoter_contract = IQuoterV2::new("0x61fFE014bA17989E743c5F6cB21bF9697530B21e".parse::<Address>().unwrap(), provider);
+        // let expected_amount_out = quoter_contract.quote_exact_input_single(QuoteExactInputSingleParams{
+        //     token_in: token_1,
+        //     token_out: token_0,
+        //     amount_in,
+        //     fee: 10000,
+        //     sqrt_price_limit_x96: U256::from_dec_str("1461446703485210103287273052203988822378723970341").unwrap()
+        // }).call().await.unwrap();
         // println!("{expected_amount_out:#?}");
         let amount_out = pool
             .get_amount_out(amount_in, token_1, token_0, Some(&mut cache_db))
             .unwrap();
         println!("amount out {amount_out}");
-
-    //     targets: [
+        //     targets: [
         //         ArbPool {
-        //             pool: 0x74c99f3f5331676f6aec2756e1f39b4fc029a83e,
+        //             pool: 0x127452f3f9cdc0389b0bf59ce6131aa3bd763598,
         //             token_in: 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2,
-        //             token_out: 0xdac17f958d2ee523a2206206994597c13d831ec7,
+        //             token_out: 0xd31a59c85ae9d8edefec411d448f90841571b89c,
         //         },
         //         ArbPool {
-        //             pool: 0x72c2178e082fedb13246877b5aa42ebce1b72218,
-        //             token_in: 0xdac17f958d2ee523a2206206994597c13d831ec7,
+        //             pool: 0x8d00d4e2577c2f41863adc6abd39adff59ba5a42,
+        //             token_in: 0xd31a59c85ae9d8edefec411d448f90841571b89c,
         //             token_out: 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2,
         //         },
         //     ],
         //     amounts_in: [
-        //         10000000000000001,
-        //         33955770,
+        //         20000000000000001,
+        //         491301926,
         //     ],
         //     amounts_out: [
-        //         33955770,
-        //         510546835786697850,
+        //         491301926,
+        //         3963877391197344453575983046348115674221700746820753546331534351508065746944,
         //     ],
         //     amount_to_coinbase: 0,
-        //     estimated_profit: 500546835786697849,
-        //                       510546835786697850
+        //     estimated_profit: 3963877391197344453575983046348115674221700746820753546331514351508065746943,
+        // } to heap
     }
 }
