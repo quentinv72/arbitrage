@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{BinaryHeap, HashSet};
+use std::default::Default;
 use std::fmt::Debug;
 use std::ops::Div;
 use std::str::FromStr;
@@ -7,7 +8,7 @@ use std::sync::Arc;
 
 use ethers::providers::Middleware;
 use ethers::types::{Address, Block, U256};
-use log::error;
+use log::{error, info};
 use revm::precompile::B256;
 use revm::primitives::{alloy_primitives, ruint, AccountInfo, Bytecode, KECCAK_EMPTY};
 use tokio::task::JoinSet;
@@ -29,6 +30,8 @@ pub struct Arbs<M: Middleware, Tx, Executor> {
     cache_db: RefCell<EthersCacheDB<M>>,
     // Executor used to manage transaction submission to the network.
     executor: Arc<Executor>,
+    // min estimated profit to include in self.txs.
+    min_profit: U256,
 }
 
 impl<M, Tx, Executor> Arbs<M, Tx, Executor>
@@ -41,12 +44,14 @@ where
         paths: ArbPaths,
         cache_db: EthersCacheDB<M>,
         executor: Executor,
+        min_profit: U256,
     ) -> Arbs<M, Tx, Executor> {
         Self {
             paths,
             txs: BinaryHeap::new(),
             cache_db: RefCell::new(cache_db),
             executor: Arc::new(executor),
+            min_profit,
         }
     }
 
@@ -89,10 +94,9 @@ where
             let (tx, res) = result.unwrap();
             match res {
                 Ok(()) => continue,
-                Err(ExecutorError::GasEstimationError(err)) => {
-                    error!("{tx:#?} got a gas estimation error {err}")
-                }
-                Err(ExecutorError::NotEnoughProfitError | ExecutorError::LockError) => {
+                Err(ExecutorError::GasEstimationError(_)) => {}
+                Err(ExecutorError::NotEnoughProfitError) => {
+                    info!("Profit is too low at the moment for {tx:?}");
                     self.txs.push(tx)
                 }
                 Err(ExecutorError::PendingBundleError {
@@ -140,12 +144,16 @@ where
                 continue;
             }
             seen.insert(*arb_path);
-            let arb_tx = self
-                .compute_arbitrage(arb_path, pools_graph, max_amount_in, num_steps)
-                .expect("Computed arb shouldn't fail");
-            if let Some(arb) = arb_tx {
-                // add arb tx to heap
-                self.txs.push(arb);
+            // info!("Computing arb for path {arb_path:#?}");
+            match self.compute_arbitrage(arb_path, pools_graph, max_amount_in, num_steps) {
+                Ok(Some(arb)) => {
+                    if arb.estimated_profit() > self.min_profit {
+                        info!("Adding arb {arb:#?} to heap");
+                        self.txs.push(arb)
+                    }
+                }
+                Ok(None) => (),
+                Err(err) => error!("An error occured for path {arb_path:#?} ---> {err}"),
             }
         }
     }
@@ -157,7 +165,8 @@ where
         max_amount_in: U256,
         num_steps: U256,
     ) -> anyhow::Result<Option<Tx>> {
-        let mut amount_in = U256::zero();
+        // Start at 1 because 0 seems to cause an error.
+        let mut amount_in = U256::one();
         let mut profitable_arbs = None;
         let mut curr_max_profit = U256::zero();
         let step_size = max_amount_in.div(num_steps);
@@ -171,7 +180,7 @@ where
                     .get_pool_data(&arb_pool.pool)
                     .expect("Pool data should not be None");
                 let amount_out = pool_data.get_amount_out(
-                    amount_in,
+                    prev_amount_in,
                     arb_pool.token_in,
                     arb_pool.token_out,
                     Some(&mut self.cache_db.borrow_mut()),
@@ -181,6 +190,7 @@ where
             }
 
             if prev_amount_in > amount_in && prev_amount_in - amount_in > curr_max_profit {
+                // println!("{tmp_amounts:#?}");
                 curr_max_profit = prev_amount_in;
                 profitable_arbs = Some(Tx::new(
                     arb_path.to_vec(),
@@ -309,7 +319,7 @@ mod arbs_tests {
         let default_executor = Executor {
             client: provider,
             executor_address: Address::random(),
-            senders: Vec::new(),
+            sender: Address::random(),
             output_token: Address::random(),
             chain_id: U64::zero(),
             tip_percentage: Default::default(),
@@ -321,7 +331,7 @@ mod arbs_tests {
             .insert_path(arb_path.clone())
             .expect("Should insert fine");
         let mut arbs: Arbs<Provider<Http>, ArbTxV1, Executor<Provider<Http>>> =
-            Arbs::new(arb_paths, cache_db, default_executor);
+            Arbs::new(arb_paths, cache_db, default_executor, U256::zero());
 
         arbs.load_uniswap_v3_quoter();
 
@@ -329,12 +339,12 @@ mod arbs_tests {
             &[uniswap_v3_pool.pool_address, uniswap_v2_pair.pair_address],
             &pools_graph,
             U256::from_dec_str("505000000000000000000000").unwrap(),
-            U256::from(100),
+            U256::from(10),
         );
         assert_eq!(arbs.txs.len(), 1);
         assert_eq!(
             arbs.txs.peek().unwrap().estimated_profit(),
-            U256::from_dec_str("1116824102838017552066455359").unwrap()
+            U256::from_dec_str("6556500114824717164690").unwrap()
         );
     }
 }

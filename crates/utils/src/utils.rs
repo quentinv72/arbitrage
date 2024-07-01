@@ -23,9 +23,10 @@ static BUILDER_URLS: &[&str] = &[
 ];
 
 pub struct Utils<M: Middleware> {
-    ws_client: Arc<Provider<Ws>>,
-    rpc_client: Arc<M>,
-    bundle_executor: Address,
+    pub ws_client: Arc<Provider<Ws>>,
+    pub rpc_client: Arc<M>,
+    pub bundle_executor: Address,
+    pub sender: Address,
     env: Env,
 }
 
@@ -35,12 +36,15 @@ pub trait Setup<M: Middleware> {
 }
 
 impl Setup<FlashbotsProvider> for Utils<FlashbotsProvider> {
-    async fn setup() -> Self {
+    async fn setup() -> Utils<FlashbotsProvider> {
         let vars = Vars::init();
-        let tx_signing_wallet: LocalWallet = vars.tx_signing_private_key.unwrap().parse().unwrap();
+        let tx_signing_wallet: LocalWallet = vars.sender_private_key.unwrap().parse().unwrap();
         let tx_signing_wallet = tx_signing_wallet.with_chain_id(1_u32);
-        let bundle_signing_wallet: LocalWallet =
-            vars.bundle_signing_private_key.unwrap().parse().unwrap();
+        let bundle_signing_wallet: LocalWallet = vars
+            .flashbots_bundle_signing_private_key
+            .unwrap()
+            .parse()
+            .unwrap();
         let provider = Provider::<Http>::try_from(vars.rpc_url.unwrap()).unwrap();
         let client = SignerMiddleware::new(
             BroadcasterMiddleware::new(
@@ -61,23 +65,12 @@ impl Setup<FlashbotsProvider> for Utils<FlashbotsProvider> {
             ws_client,
             rpc_client: client,
             bundle_executor: vars.bundle_executor_address.unwrap().parse().unwrap(),
+            sender: vars.sender_address.unwrap(),
         }
     }
 }
 
 impl<M: Middleware> Utils<M> {
-    pub fn get_rpc_client(&self) -> Arc<M> {
-        Arc::clone(&self.rpc_client)
-    }
-
-    pub fn get_ws_client(&self) -> Arc<Provider<Ws>> {
-        Arc::clone(&self.ws_client)
-    }
-
-    pub fn get_bundle_executor_address(&self) -> Address {
-        self.bundle_executor
-    }
-
     pub fn is_production(&self) -> bool {
         match self.env {
             Production => true,
@@ -93,8 +86,9 @@ impl<M: Middleware> Utils<M> {
 struct Vars {
     rpc_url: Option<String>,
     ws_url: Option<String>,
-    tx_signing_private_key: Option<String>,
-    bundle_signing_private_key: Option<String>,
+    sender_private_key: Option<String>,
+    sender_address: Option<Address>,
+    flashbots_bundle_signing_private_key: Option<String>,
     bundle_executor_address: Option<String>,
 }
 
@@ -103,8 +97,11 @@ impl Vars {
         Vars {
             rpc_url: std::env::var("RPC_URL").ok(),
             ws_url: std::env::var("WS_URL").ok(),
-            tx_signing_private_key: std::env::var("TX_PRIVATE_KEY").ok(),
-            bundle_signing_private_key: std::env::var("BUNDLE_PRIVATE_KEY").ok(),
+            sender_private_key: std::env::var("SENDER_PRIVATE_KEY").ok(),
+            sender_address: std::env::var("SENDER_ADDRESS")
+                .ok()
+                .map(|x| x.parse().unwrap()),
+            flashbots_bundle_signing_private_key: std::env::var("BUNDLE_PRIVATE_KEY").ok(),
             bundle_executor_address: std::env::var("BUNDLE_EXECUTOR").ok(),
         }
     }

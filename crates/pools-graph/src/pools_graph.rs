@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use dashmap::{DashMap, DashSet};
 use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::try_result::TryResult;
-use dashmap::{DashMap, DashSet};
 use ethers::contract::ContractError;
 use ethers::prelude::TxHash;
 use ethers::providers::Middleware;
@@ -54,7 +54,7 @@ impl PoolsGraph {
         &self,
         block: Block<Tx>,
         client: Arc<M>,
-    ) -> Result<(), Box<dyn std::error::Error>>
+    ) -> Result<Vec<Address>, Box<dyn std::error::Error>>
     where
         Tx: Into<TxHash> + Send + Sync,
         M: Middleware + 'static,
@@ -64,8 +64,9 @@ impl PoolsGraph {
             self.maybe_update_graph_tx(tx, &mut pools_to_update, client.clone())
                 .await?;
         }
+        let updated_pools = pools_to_update.iter().copied().collect();
         self.flush_updates(client, pools_to_update).await?;
-        Ok(())
+        Ok(updated_pools)
     }
 
     #[inline]
@@ -318,7 +319,7 @@ mod tests {
         let provider = Arc::new(Provider::<Http>::try_from(anvil.endpoint()).unwrap());
         assert!(graph.get_pool_data(&new_pair_address).is_none());
         let block = provider.get_block(BlockNumber::Latest).await.unwrap();
-        graph
+        let updated_pools = graph
             .maybe_update_graph(block.unwrap(), provider)
             .await
             .unwrap();
@@ -338,6 +339,7 @@ mod tests {
                 Some(factory),
             ))
         );
+        assert_eq!(updated_pools, vec![new_pair_address]);
         drop(anvil);
     }
 }

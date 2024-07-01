@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
+use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use ethers::addressbook::Address;
 use ethers::prelude::{Http, Provider, U256, U64};
 use ethers::utils::WEI_IN_ETHER;
@@ -10,8 +10,8 @@ use pools_graph::arbitrage::arb_paths::ArbPaths;
 use pools_graph::arbitrage::arb_tx_v1::ArbTxV1;
 use pools_graph::arbitrage::arbs::{ArbPool, Arbs};
 use pools_graph::arbitrage::executor::Executor;
-use pools_graph::pool_data::uniswap_v3::utils::LoadQuoterV3;
 use pools_graph::pool_data::uniswap_v3::UniswapV3;
+use pools_graph::pool_data::uniswap_v3::utils::LoadQuoterV3;
 use pools_graph::pools_graph::PoolsGraph;
 
 fn bench_compute_all_arbitrage_2_v3_pools(c: &mut Criterion) {
@@ -55,7 +55,7 @@ fn setup_arb() -> (
     let default_executor = Executor {
         client: provider,
         executor_address: Address::random(),
-        senders: Vec::new(),
+        sender: Address::random(),
         output_token: Address::random(),
         chain_id: U64::zero(),
         tip_percentage: Default::default(),
@@ -94,7 +94,7 @@ fn setup_arb() -> (
     let mut arb_paths = ArbPaths::default();
     arb_paths.insert_path(arb_path_1).unwrap();
 
-    let arbs = Arbs::new(arb_paths, cache_db, default_executor);
+    let arbs = Arbs::new(arb_paths, cache_db, default_executor, U256::zero());
     (arbs, pools_graph)
 }
 
