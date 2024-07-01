@@ -11,7 +11,6 @@ use revm::primitives::{
     address, alloy_primitives, ruint, AccountInfo, Bytecode, ExecutionResult, TransactTo,
 };
 use revm::Evm;
-use revm::GetInspector;
 
 use contracts::i_uniswap_v_3_factory::PoolCreatedFilter;
 use contracts::i_uniswap_v_3_pool::{IUniswapV3Pool, SwapCall};

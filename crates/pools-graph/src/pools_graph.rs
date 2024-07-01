@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use dashmap::{DashMap, DashSet};
 use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::try_result::TryResult;
-use dashmap::{DashMap, DashSet};
 use ethers::contract::ContractError;
 use ethers::prelude::TxHash;
 use ethers::providers::Middleware;
@@ -64,7 +64,7 @@ impl PoolsGraph {
             self.maybe_update_graph_tx(tx, &mut pools_to_update, client.clone())
                 .await?;
         }
-        let updated_pools = pools_to_update.iter().map(|x| *x).collect();
+        let updated_pools = pools_to_update.iter().copied().collect();
         self.flush_updates(client, pools_to_update).await?;
         Ok(updated_pools)
     }

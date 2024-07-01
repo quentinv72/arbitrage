@@ -1,11 +1,10 @@
 // Targeted exchange types: UNI-V2, UNI-V3
 // Max amount in: 1 ETHER
-// Path type: WETH ==> Token_A ==> WETH
+// Path type: WETH ==> Token_A ==> Token B ==> WETH
 // Tip percentage: 90%
 // New pools not fully supported yet
 
 use std::collections::HashSet;
-use std::ops::Mul;
 use std::sync::Arc;
 
 use ethers::middleware::Middleware;
@@ -14,7 +13,7 @@ use ethers::providers::StreamExt;
 use ethers::types::{Address, TxHash, U256, U64};
 use ethers::utils::WEI_IN_ETHER;
 use itertools::Itertools;
-use log::{debug, info};
+use log::{error, info};
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
 use revm::db::EthersDB;
@@ -26,7 +25,7 @@ use pools_graph::arbitrage::executor::Executor;
 use pools_graph::pool_data::factory::{FactoryV2, FactoryV3};
 use pools_graph::pool_data::pool_data::PoolData;
 use pools_graph::pool_data::uniswap_v2::utils::{
-    load_uniswap_v2_pairs, CRO_DEFI_FACTORY, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY,
+    CRO_DEFI_FACTORY, load_uniswap_v2_pairs, LUA_SWAP_FACTORY, PANCAKE_SWAP_FACTORY,
     SUSHISWAP_FACTORY, UNISWAP_V2_FACTORY, ZEUS_FACTORY,
 };
 use pools_graph::pool_data::uniswap_v3::utils::{
@@ -37,13 +36,13 @@ use pools_graph::pools_graph::PoolsGraph;
 use utils::logging::setup_logging;
 use utils::utils::{FlashbotsProvider, Setup, Utils};
 
-static V2_FACTORIES: [&Lazy<FactoryV2>; 2] = [
+static V2_FACTORIES: [&Lazy<FactoryV2>; 6] = [
     &UNISWAP_V2_FACTORY,
     &SUSHISWAP_FACTORY,
-    // &LUA_SWAP_FACTORY,
-    // &CRO_DEFI_FACTORY,
-    // &ZEUS_FACTORY,
-    // &PANCAKE_SWAP_FACTORY,
+    &LUA_SWAP_FACTORY,
+    &CRO_DEFI_FACTORY,
+    &ZEUS_FACTORY,
+    &PANCAKE_SWAP_FACTORY,
 ];
 
 static V3_FACTORIES: [&Lazy<FactoryV3>; 1] = [&UNISWAP_V3_FACTORY];
@@ -74,7 +73,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     load_uniswap_v2_pairs(&pools_graph, v2_factories, Arc::clone(&utils.rpc_client)).await?;
     load_uniswap_v3_pools(&pools_graph, v3_factories, Arc::clone(&utils.rpc_client)).await?;
     let arbitrage_paths = init_arb_(&pools_graph);
-    // println!("{arbitrage_paths:#?}");
     let cache_db = EthersCacheDB::new(EthersDB::new(Arc::clone(&utils.rpc_client), None).unwrap());
     let executor = Executor {
         client: Arc::clone(&utils.rpc_client),
@@ -113,67 +111,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         arbs.clear_cache();
     }
     Ok(())
-}
-
-fn init_arb_paths(pools_graph: &PoolsGraph) -> ArbPaths {
-    let mut arb_paths = ArbPaths::default();
-    let weth_token_nbd = pools_graph
-        .get_neighbouring_tokens(&WETH.parse().unwrap())
-        .unwrap();
-    for neighbour in weth_token_nbd.iter() {
-        for pool in pools_graph
-            .get_pool_addresses(WETH.parse().unwrap(), *neighbour)
-            .unwrap()
-            .value()
-            .iter()
-        {
-            let input_arb_pool = ArbPool {
-                pool: *pool,
-                token_in: WETH.parse().unwrap(),
-                token_out: *neighbour,
-            };
-            for other_pool in pools_graph
-                .get_pool_addresses(WETH.parse().unwrap(), *neighbour)
-                .unwrap()
-                .value()
-                .iter()
-            {
-                if *other_pool == *pool {
-                    continue;
-                };
-                let output_arb_pool = ArbPool {
-                    pool: *other_pool,
-                    token_in: *neighbour,
-                    token_out: WETH.parse().unwrap(),
-                };
-
-                match (
-                    pools_graph
-                        .get_pool_data(&input_arb_pool.pool)
-                        .unwrap()
-                        .value(),
-                    pools_graph
-                        .get_pool_data(&output_arb_pool.pool)
-                        .unwrap()
-                        .value(),
-                ) {
-                    (PoolData::UniswapV3(_), _) => {
-                        arb_paths
-                            .insert_path(vec![input_arb_pool, output_arb_pool])
-                            .expect("If this fails then there is an implementation problem.");
-                    }
-                    (_, PoolData::UniswapV3(_)) => {
-                        arb_paths
-                            .insert_path(vec![input_arb_pool, output_arb_pool])
-                            .expect("If this fails then there is an implementation problem.");
-                    }
-                    (_, _) => (),
-                }
-            }
-        }
-    }
-
-    arb_paths
 }
 
 fn init_arb_(pools_graph: &PoolsGraph) -> ArbPaths {
@@ -218,7 +155,7 @@ fn init_arb_(pools_graph: &PoolsGraph) -> ArbPaths {
             if let PoolData::UniswapV3(_) = pools_graph.get_pool_data(&pool.pool).unwrap().value() {
                 match arb_path.insert_path(path) {
                     Err(ArbPathsErrors::DuplicatedPools) => {}
-                    _ => {}
+                    err => {error!("Something happened {err:?}")}
                 }
                 break;
             }

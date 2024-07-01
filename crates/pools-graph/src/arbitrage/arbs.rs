@@ -10,15 +10,15 @@ use ethers::providers::Middleware;
 use ethers::types::{Address, Block, U256};
 use log::{error, info};
 use revm::precompile::B256;
-use revm::primitives::{AccountInfo, alloy_primitives, Bytecode, KECCAK_EMPTY, ruint};
+use revm::primitives::{alloy_primitives, ruint, AccountInfo, Bytecode, KECCAK_EMPTY};
 use tokio::task::JoinSet;
 
 use crate::arbitrage::arb_paths::ArbPaths;
-use crate::arbitrage::ArbTx;
 use crate::arbitrage::executor::{ExecutorError, Handler};
+use crate::arbitrage::ArbTx;
 use crate::pool_data::pool_data::PoolDataTrait;
-use crate::pool_data::uniswap_v3::{QUOTER_BYTECODE, QUOTER_MOCK_ADDRESS};
 use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
+use crate::pool_data::uniswap_v3::{QUOTER_BYTECODE, QUOTER_MOCK_ADDRESS};
 use crate::pool_data::utils::EthersCacheDB;
 use crate::pools_graph::PoolsGraph;
 
@@ -94,8 +94,7 @@ where
             let (tx, res) = result.unwrap();
             match res {
                 Ok(()) => continue,
-                Err(ExecutorError::GasEstimationError(err)) => {
-                }
+                Err(ExecutorError::GasEstimationError(_)) => {}
                 Err(ExecutorError::NotEnoughProfitError) => {
                     info!("Profit is too low at the moment for {tx:?}");
                     self.txs.push(tx)
@@ -247,11 +246,11 @@ mod arbs_tests {
     use crate::arbitrage::arb_paths::ArbPaths;
     use crate::arbitrage::arb_tx_v1::ArbTxV1;
     use crate::arbitrage::arbs::{ArbPool, Arbs};
-    use crate::arbitrage::ArbTx;
     use crate::arbitrage::executor::Executor;
+    use crate::arbitrage::ArbTx;
     use crate::pool_data::uniswap_v2::UniswapV2;
-    use crate::pool_data::uniswap_v3::UniswapV3;
     use crate::pool_data::uniswap_v3::utils::LoadQuoterV3;
+    use crate::pool_data::uniswap_v3::UniswapV3;
     use crate::pools_graph::PoolsGraph;
 
     #[tokio::test(flavor = "multi_thread")]
