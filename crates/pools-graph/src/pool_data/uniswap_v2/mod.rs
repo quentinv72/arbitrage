@@ -13,7 +13,6 @@ use contracts::i_uniswap_v_2_pair::{IUniswapV2Pair, SwapCall};
 
 use crate::pool_data::factory::{Factory, FactoryV2};
 use crate::pool_data::pool_data::PoolDataTrait;
-use crate::pool_data::utils::EthersCacheDB;
 
 pub mod utils;
 
@@ -142,12 +141,12 @@ impl PoolDataTrait for UniswapV2 {
     }
 
     #[inline]
-    fn get_amount_out<M: Middleware>(
+    async fn get_amount_out<M: Middleware>(
         &self,
         amount_in: U256,
         token_in: Address,
         _token_out: Address,
-        _cache_db: Option<&mut EthersCacheDB<M>>,
+        _client: Option<Arc<M>>,
     ) -> anyhow::Result<U256> {
         let zero_for_one = token_in == self.token_0;
         let reserve_in = if zero_for_one {

@@ -22,18 +22,25 @@ pub enum PoolData {
 #[enum_dispatch]
 pub trait PoolDataTrait {
     fn get_tokens(&self) -> (Address, Address);
+
     fn get_pool_address(&self) -> Address;
+
     fn get_last_block_update(&self) -> U64;
-    fn get_amount_out<M: Middleware>(
+
+    #[allow(async_fn_in_trait)]
+    async fn get_amount_out<M: Middleware>(
         &self,
         amount_in: U256,
         token_in: Address,
         token_out: Address,
-        cache_db: Option<&mut EthersCacheDB<M>>,
+        client: Option<Arc<M>>,
     ) -> anyhow::Result<U256>;
+
     fn get_factory(&self) -> Factory;
+
     #[allow(async_fn_in_trait)]
     async fn update_pool<M: Middleware>(&mut self, client: Arc<M>) -> Result<(), ContractError<M>>;
+
     fn build_swap_calldata(
         &self,
         amount_in: U256,

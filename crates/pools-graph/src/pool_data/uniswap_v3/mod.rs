@@ -1,20 +1,18 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use ethers::abi::{AbiDecode, AbiEncode, Error, RawLog};
 use ethers::contract::{ContractError, EthEvent};
 use ethers::middleware::Middleware;
 use ethers::prelude::{H256, U64};
 use ethers::types::{Address, Bytes, I256, U256};
 use revm::primitives::{
-    address, alloy_primitives, ruint, AccountInfo, Bytecode, ExecutionResult, TransactTo,
+    AccountInfo, address, alloy_primitives, Bytecode, ruint,
 };
-use revm::Evm;
 
+use contracts::i_quoter_v_2::{IQuoterV2, QuoteExactInputSingleParams};
 use contracts::i_uniswap_v_3_factory::PoolCreatedFilter;
 use contracts::i_uniswap_v_3_pool::{IUniswapV3Pool, SwapCall};
-use contracts::uniswap_v_3_quoter::GetAmountOutCall;
 
 use crate::pool_data::factory::{Factory, FactoryV3};
 use crate::pool_data::pool_data::PoolDataTrait;
@@ -131,48 +129,28 @@ impl PoolDataTrait for UniswapV3 {
     }
 
     #[inline]
-    fn get_amount_out<M: Middleware>(
+    async fn get_amount_out<M: Middleware>(
         &self,
         amount_in: U256,
         token_in: Address,
-        _token_out: Address,
-        cache_db: Option<&mut EthersCacheDB<M>>,
+        token_out: Address,
+        client: Option<Arc<M>>,
     ) -> anyhow::Result<U256> {
+        let client = client.expect("There should be a client");
+        let quoter_contract = IQuoterV2::new(self.factory.quoter_address, client);
         let zero_for_one = token_in == self.token_0;
-        let cache_db = cache_db.expect("Missing cache db");
-        let encoded = GetAmountOutCall {
-            pool: self.pool_address,
-            zero_for_one,
-            amount_in,
-        }
-        .encode();
-
-        let mut evm = Evm::builder()
-            .with_db(cache_db)
-            .modify_tx_env(|tx| {
-                // 0x1 because calling USDC proxy from zero address fails
-                tx.caller = address!("0000000000000000000000000000000000000001");
-                tx.transact_to = TransactTo::Call(QUOTER_MOCK_ADDRESS);
-                tx.data = encoded.into();
-                tx.value = ruint::aliases::U256::from(0);
-            })
-            .build();
-        let ref_tx = evm.transact().unwrap();
-        let result = ref_tx.result;
-        let amount_out = match result {
-            ExecutionResult::Revert { output, .. } => {
-                if output.0.len() == 32 {
-                    <U256>::decode(output)?
-                } else {
-                    U256::zero()
-                }
-            }
-            result => {
-                return Err(anyhow!(
-                    "UniswapV3::get_amount_out execution failed: {result:#?}"
-                ));
-            }
+        let sqrt_price_limit = if zero_for_one {
+            U256::from_dec_str("4295128749").unwrap()
+        } else {
+            U256::from_dec_str("1461446703485210103287273052203988822378723970341").unwrap()
         };
+        let (amount_out, _,_,_) = quoter_contract.quote_exact_input_single(QuoteExactInputSingleParams {
+            token_in: token_in,
+            token_out: token_out,
+            amount_in: amount_in,
+            fee: self.fee_tier,
+            sqrt_price_limit_x96:  sqrt_price_limit,
+        }).call().await?;
 
         Ok(amount_out)
     }
@@ -220,7 +198,6 @@ mod tests {
     use ethers::prelude::{Http, Provider};
     use ethers::types::{Address, U256, U64};
     use ethers::utils::Anvil;
-    use revm::db::{CacheDB, EthersDB};
 
     use contracts::i_quoter_v_2::{IQuoterV2, QuoteExactInputSingleParams};
     use contracts::i_uniswap_v_3_pool::IUniswapV3Pool;
@@ -295,16 +272,16 @@ mod tests {
             token_1,
             fee_tier: 3,
             block_last_updates: U64::zero(),
-            factory: Default::default(),
+            factory: FactoryV3 {
+                quoter_address: "0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3"
+                    .parse::<Address>()
+                    .unwrap(),
+                ..Default::default()
+            }
         };
 
-        let ethers_db = EthersDB::new(provider, None).unwrap();
-
-        let mut cache_db = CacheDB::new(ethers_db);
-
-        UniswapV3::load_quoter_bytecode(&mut cache_db);
         let amount_out = pool
-            .get_amount_out(U256::from(1000), token_0, token_1, Some(&mut cache_db))
+            .get_amount_out(U256::from(1000), token_0, token_1, Some(provider.clone()))
             .unwrap();
         let expected_amount_out = quoter_contract
             .quote_exact_input_single(QuoteExactInputSingleParams {
@@ -320,7 +297,7 @@ mod tests {
         assert_eq!(amount_out, expected_amount_out.0);
 
         let amount_out = pool
-            .get_amount_out(U256::from(10), token_0, token_1, Some(&mut cache_db))
+            .get_amount_out(U256::from(10), token_0, token_1, Some(provider.clone()))
             .unwrap();
         let expected_amount_out = quoter_contract
             .quote_exact_input_single(QuoteExactInputSingleParams {
@@ -336,7 +313,7 @@ mod tests {
         assert_eq!(amount_out, expected_amount_out.0);
 
         let amount_out = pool
-            .get_amount_out(U256::from(100000000), token_1, token_0, Some(&mut cache_db))
+            .get_amount_out(U256::from(100000000), token_1, token_0, Some(provider.clone()))
             .unwrap();
         let expected_amount_out = quoter_contract
             .quote_exact_input_single(QuoteExactInputSingleParams {
@@ -356,54 +333,45 @@ mod tests {
         drop(anvil);
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn get_amount_out_test() {
-        // Use revm-inspectors for tracing!
-        // https://github.com/paradigmxyz/revm-inspectors/blob/main/tests/it/geth.rs
-        // call frames example is useful
-
-        let token_0 = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-            .parse()
-            .unwrap();
-
-        let token_1 = "0xD31a59c85aE9D8edEFeC411D448f90841571b89c"
-            .parse()
-            .unwrap();
-        let provider = Arc::new(Provider::<Http>::try_from("http://10.88.111.23:8545").unwrap());
-
-        let ethers_db = EthersDB::new(provider.clone(), None).unwrap();
-
-        let mut cache_db = CacheDB::new(ethers_db);
-
-        UniswapV3::load_quoter_bytecode(&mut cache_db);
-
-        let pool = UniswapV3 {
-            pool_address: "0x8d00d4E2577c2f41863Adc6aBd39adFF59ba5A42"
-                .parse()
-                .unwrap(),
-            sqrt_price_x_96: U256::zero(),
-            token_0,
-            token_1,
-            fee_tier: 3,
-            block_last_updates: U64::zero(),
-            factory: Default::default(),
-        };
-
-        let amount_in = U256::from_dec_str("1").unwrap();
-
-        // let quoter_contract = IQuoterV2::new("0x61fFE014bA17989E743c5F6cB21bF9697530B21e".parse::<Address>().unwrap(), provider);
-        // let expected_amount_out = quoter_contract.quote_exact_input_single(QuoteExactInputSingleParams{
-        //     token_in: token_1,
-        //     token_out: token_0,
-        //     amount_in,
-        //     fee: 10000,
-        //     sqrt_price_limit_x96: U256::from_dec_str("1461446703485210103287273052203988822378723970341").unwrap()
-        // }).call().await.unwrap();
-        // println!("{expected_amount_out:#?}");
-        let amount_out = pool
-            .get_amount_out(amount_in, token_1, token_0, Some(&mut cache_db))
-            .unwrap();
-        println!("amount out {amount_out}");
+    // #[tokio::test(flavor = "multi_thread")]
+    // async fn get_amount_out_test() {
+    //     // Use revm-inspectors for tracing!
+    //     // https://github.com/paradigmxyz/revm-inspectors/blob/main/tests/it/geth.rs
+    //     // call frames example is useful
+    //
+    //     let token_0 = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+    //         .parse()
+    //         .unwrap();
+    //
+    //     let token_1 = "0xD31a59c85aE9D8edEFeC411D448f90841571b89c"
+    //         .parse()
+    //         .unwrap();
+    //     let provider = Arc::new(Provider::<Http>::try_from("http://10.88.111.23:8545").unwrap());
+    //
+    //     let ethers_db = EthersDB::new(provider.clone(), None).unwrap();
+    //
+    //     let mut cache_db = CacheDB::new(ethers_db);
+    //
+    //     UniswapV3::load_quoter_bytecode(&mut cache_db);
+    //
+    //     let pool = UniswapV3 {
+    //         pool_address: "0x8d00d4E2577c2f41863Adc6aBd39adFF59ba5A42"
+    //             .parse()
+    //             .unwrap(),
+    //         sqrt_price_x_96: U256::zero(),
+    //         token_0,
+    //         token_1,
+    //         fee_tier: 3,
+    //         block_last_updates: U64::zero(),
+    //         factory: Default::default(),
+    //     };
+    //
+    //     let amount_in = U256::from_dec_str("1").unwrap();
+    //
+    //     let amount_out = pool
+    //         .get_amount_out(amount_in, token_1, token_0, Some(provider))
+    //         .unwrap();
+    //     println!("amount out {amount_out}");
         //     targets: [
         //         ArbPool {
         //             pool: 0x127452f3f9cdc0389b0bf59ce6131aa3bd763598,
@@ -427,5 +395,5 @@ mod tests {
         //     amount_to_coinbase: 0,
         //     estimated_profit: 3963877391197344453575983046348115674221700746820753546331514351508065746943,
         // } to heap
-    }
+    // }
 }
